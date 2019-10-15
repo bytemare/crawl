@@ -29,6 +29,10 @@ matrix:
   include:
     - os: linux
       dist: trusty
+      go :
+        - 1.13
+        after_success:
+          - golangci-lint run ./... --enable-all --disable=godox --disable=gochecknoglobals --disable=maligned --disable=gochecknoinits --trace-path=./trace.ci
     - os: osx
     - os: windows
   allow_failures:
@@ -46,5 +50,4 @@ script:
 
 after_success:
   - sonar-scanner
-  - golangci-lint run ./... --enable-all --disable=godox --disable=gochecknoglobals --disable=maligned --disable=gochecknoinits --trace-path=./trace.ci
   - bash <(curl -s https://codecov.io/bash)
