@@ -9,9 +9,9 @@ go:
 env:
   - GO111MODULE=on
 
-branches:
-  only:
-  - dev
+#branches:
+#  only:
+#  - dev
 
 addons:
   sonarcloud:
