@@ -59,7 +59,7 @@ func extractLink(origin string, token html.Token) string {
 func sanitise(origin string, link string) (string, error) {
 	u, err := url.Parse(link)
 	if err != nil {
-		msg := fmt.Sprintf("Couldn't parse %s : %s", link, err)
+		msg := fmt.Sprintf("Error in parsing url : %s", err)
 		return "", errors.New(msg)
 	}
 
@@ -69,7 +69,7 @@ func sanitise(origin string, link string) (string, error) {
 
 	base, err := url.Parse(origin)
 	if err != nil {
-		msg := fmt.Sprintf("Couldn't parse %s : %s", origin, err)
+		msg := fmt.Sprintf("Error in parsing url : %s", err)
 		return "", errors.New(msg)
 	}
 	u = base.ResolveReference(u)
