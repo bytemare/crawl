@@ -1,9 +1,9 @@
 language: go
 
 go:
-  - 1.11
-  - 1.12
-  - 1.13
+  - "1.11"
+  - "1.12"
+  - "1.13"
   - tip
 
 env:
@@ -30,9 +30,9 @@ matrix:
     - os: linux
       dist: trusty
       go :
-        - 1.13
-        after_success:
-          - golangci-lint run ./... --enable-all --disable=godox --disable=gochecknoglobals --disable=maligned --disable=gochecknoinits --trace-path=./trace.ci
+        - "1.13"
+      after_success:
+        - golangci-lint run ./... --enable-all --disable=godox --disable=gochecknoglobals --disable=maligned --disable=gochecknoinits --trace-path=./trace.ci
     - os: osx
     - os: windows
   allow_failures:
