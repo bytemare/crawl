@@ -31,6 +31,8 @@ matrix:
       dist: trusty
       go :
         - "1.13"
+      before_install:
+        - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
       after_success:
         - golangci-lint run ./... --enable-all --disable=godox --disable=gochecknoglobals --disable=maligned --disable=gochecknoinits --trace-path=./trace.ci
     - os: osx
@@ -41,7 +43,6 @@ matrix:
 
 before_install:
   - go get github.com/mattn/goveralls
-  - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
 
 script:
   - go test -trace trace.out
