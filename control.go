@@ -142,6 +142,7 @@ func StreamLinks(domain string, timeout time.Duration) (outputChan chan *Result,
 
 // FetchLinks is a wrapper around StreamLinks and does the same, except it blocks and accumulates all links before
 // returning them to the caller.
+// todo : return indicator of stop condition : signal, timeout, end of tree
 func FetchLinks(domain string, timeout time.Duration) ([]string, error) {
 	results, err := StreamLinks(domain, timeout)
 	if err != nil {
