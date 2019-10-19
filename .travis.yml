@@ -41,7 +41,7 @@ before_install:
 script:
   - go test -v -trace trace.out
   - go test -v -race -coverprofile=coverage.out -covermode=atomic
-  - golangci-lint run ./... --enable-all --disable=godox --disable=gochecknoglobals --disable=maligned --disable=gochecknoinits --trace-path=./trace.ci
+  - golangci-lint run ./...
   - $GOPATH/bin/goveralls -service=travis-ci
 
 after_success:
