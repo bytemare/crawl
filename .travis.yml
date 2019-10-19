@@ -28,12 +28,6 @@ matrix:
   include:
     - os: linux
       dist: trusty
-      go :
-        - 1.13
-      before_install:
-        - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
-      after_success:
-        - golangci-lint run ./... --enable-all --disable=godox --disable=gochecknoglobals --disable=maligned --disable=gochecknoinits --trace-path=./trace.ci
     - os: osx
     - os: windows
   allow_failures:
@@ -42,10 +36,12 @@ matrix:
 
 before_install:
   - go get github.com/mattn/goveralls
+  - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
 
 script:
   - go test -v -trace trace.out
   - go test -v -race -coverprofile=coverage.out -covermode=atomic
+  - golangci-lint run ./... --enable-all --disable=godox --disable=gochecknoglobals --disable=maligned --disable=gochecknoinits --trace-path=./trace.ci
   - $GOPATH/bin/goveralls -service=travis-ci
 
 after_success:
