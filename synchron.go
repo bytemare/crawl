@@ -11,10 +11,10 @@ import (
 type synchron struct {
 	timeout  time.Duration
 	results  chan *Result
-	group    sync.WaitGroup
 	stopChan chan struct{}
-	stopFlag bool
 	mutex    *sync.Mutex
+	group    sync.WaitGroup
+	stopFlag bool
 }
 
 // newSynchron returns an initialised synchron struct
