@@ -17,9 +17,9 @@ var log = logrus.New()
 
 // init is called when package is loaded, to set logging parameters
 func init() {
-	var logging = true
-	var defLogFilePerms os.FileMode = 0666
-	var defLogFilePath = "./log-crawler.log"
+	logging := true
+	defLogFilePath := "./log-crawler.log"
+	defLogFilePerms := 0666
 
 	// Enable or disable all logging
 	if !logging {
@@ -29,7 +29,7 @@ func init() {
 		log.SetLevel(logrus.TraceLevel)
 
 		// Set logging output
-		log2File(defLogFilePath, defLogFilePerms)
+		log2File(defLogFilePath, os.FileMode(defLogFilePerms))
 
 		// Set logging format
 		log.SetFormatter(&logrus.JSONFormatter{})
@@ -54,6 +54,7 @@ func timer(syn *synchron) {
 		log.Info("No value assigned for timeout. Timer will not run.")
 		return
 	}
+
 	timer := time.After(syn.timeout)
 
 loop:
@@ -82,6 +83,7 @@ func signalHandler(syn *synchron) {
 
 	// Block until a signal is received
 	<-sig
+
 	if syn.checkout() {
 		log.Info("signalHandler received a signal. Stopping.")
 		syn.stopChan <- struct{}{} // for timer
