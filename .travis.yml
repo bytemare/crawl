@@ -1,9 +1,9 @@
 language: go
 
 go:
-  - "1.11"
-  - "1.12"
-  - "1.13"
+  - 1.11
+  - 1.12
+  - 1.13
   - tip
 
 env:
@@ -30,7 +30,7 @@ matrix:
     - os: linux
       dist: trusty
       go :
-        - "1.13"
+        - 1.13
       before_install:
         - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
       after_success:
