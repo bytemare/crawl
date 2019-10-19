@@ -45,8 +45,8 @@ before_install:
   - go get github.com/mattn/goveralls
 
 script:
-  - go test -trace trace.out
-  - go test -race -coverprofile=coverage.out -covermode=atomic
+  - go test -v -trace trace.out
+  - go test -v -race -coverprofile=coverage.out -covermode=atomic
   - $GOPATH/bin/goveralls -service=travis-ci
 
 after_success:
