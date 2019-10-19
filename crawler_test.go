@@ -22,6 +22,8 @@ func TestNewCrawlerFail(t *testing.T) {
 func TestInitialiseCrawlerFail(t *testing.T) {
 	go signalHandler(syn)
 
+	time.Sleep(200 * time.Millisecond)
+
 	c := initialiseCrawler(badURL, syn)
 	if c != nil {
 		t.Errorf("initialiseCrawler() should fail with invalid domain. URL : '%s'.", badURL)
