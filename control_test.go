@@ -46,6 +46,17 @@ func TestFetchLinksSuccess(t *testing.T) {
 	}
 }
 
+// TestScrapLinksFail tests a failing condition for ScrapLinks()
+func TestScrapLinksFail(t *testing.T) {
+	urlBad := "https://example.com/%"
+	timeout := 3 * time.Second
+
+	_, err := crawl.ScrapLinks(urlBad, timeout)
+	if err == nil {
+		t.Errorf("ScrapLinks() should fail on invalid URL. URL : '%s'.", urlBad)
+	}
+}
+
 /*
 // TestFetchLinksInterrupt simulates a crawling with signal interrupt
 func TestFetchLinksInterrupt(t *testing.T) {
