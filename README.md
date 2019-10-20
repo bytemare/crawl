@@ -1,4 +1,5 @@
-# crawl [![Build Status](https://travis-ci.com/bytemare/crawl.svg?branch=master)](https://travis-ci.com/bytemare/crawl) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=bytemare_crawl&metric=alert_status)](https://sonarcloud.io/dashboard?id=bytemare_crawl) [![Coverage Status](https://coveralls.io/repos/github/bytemare/crawl/badge.svg?branch=master)](https://coveralls.io/github/bytemare/crawl?branch=master) [![Go Report Card](https://goreportcard.com/badge/github.com/bytemare/crawl)](https://goreportcard.com/report/github.com/bytemare/crawl) [![codebeat badge](https://codebeat.co/badges/db89a587-9d35-49ef-96b1-d62b9cd1775b)](https://codebeat.co/projects/github-com-bytemare-crawl-master) [![GolangCI](https://golangci.com/badges/github.com/bytemare/crawl.svg)](https://golangci.com/r/github.com/bytemare/crawl) [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/3285/badge)](https://bestpractices.coreinfrastructure.org/projects/3285) [![GoDoc](https://godoc.org/github.com/bytemare/crawl?status.svg)](https://godoc.org/github.com/bytemare/crawl)
+# crawl
+[![Build Status](https://travis-ci.com/bytemare/crawl.svg?branch=master)](https://travis-ci.com/bytemare/crawl) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=bytemare_crawl&metric=coverage)](https://sonarcloud.io/dashboard?id=bytemare_crawl) [![Go Report Card](https://goreportcard.com/badge/github.com/bytemare/crawl)](https://goreportcard.com/report/github.com/bytemare/crawl) [![codebeat badge](https://codebeat.co/badges/db89a587-9d35-49ef-96b1-d62b9cd1775b)](https://codebeat.co/projects/github-com-bytemare-crawl-master) [![GolangCI](https://golangci.com/badges/github.com/bytemare/crawl.svg)](https://golangci.com/r/github.com/bytemare/crawl) [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/3285/badge)](https://bestpractices.coreinfrastructure.org/projects/3285) [![GoDoc](https://godoc.org/github.com/bytemare/crawl?status.svg)](https://godoc.org/github.com/bytemare/crawl)
 
 The crawler scraps a page for links, follows them and scrapes them in the same fashion.
 
@@ -103,7 +104,7 @@ func myScraper() {
 
 ## Supported go versions
 
-We support the three major Go versions, which are 1.11, 1.12, and 1.13 at the moment.
+We support the last two major Go versions, which are 1.12 and 1.13 at the moment.
 
 ## Contributing
 
