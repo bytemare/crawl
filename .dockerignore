@@ -1,0 +1,7 @@
+.github
+.gitignore
+.golangci.yml
+.travis.yml
+*.md
+sonar-properties
+*_test.go
