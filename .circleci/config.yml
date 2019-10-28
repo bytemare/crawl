@@ -1,0 +1,43 @@
+version: 2.1
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.12
+      - image: circleci/golang:1.13
+
+    working_directory: /go/src/github.com/bytemare/crawl
+    steps:
+      - checkout
+
+      - run:
+          name: Pull linters and inspection stuff
+          command: |
+            go get github.com/mattn/goveralls
+            go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+      
+      - run:
+          name: Run static analysis and linters
+          command: |
+            golangci-lint run ./...
+
+      - run:
+          name: Run tests and coverage
+          command: |
+            go test -v -trace trace.out
+            go test -v -race -coverprofile=coverage.out -covermode=atomic
+
+      - run:
+          name: Run result scanners
+          command: |
+            $GOPATH/bin/goveralls -service=travis-ci
+
+      - sonarcloud/scan
+
+orbs:
+  sonarcloud: sonarsource/sonarcloud@1.0.0
+
+workflows:
+  main:
+    jobs:
+      - build:
+          context: SonarCloud
