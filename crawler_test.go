@@ -7,74 +7,103 @@ import (
 	"time"
 )
 
-var (
-	timeout    = 3 * time.Second
-	syn        = newSynchron(timeout, 1)
-	urlBad     = "https://example.com/%"
-	urlValid   = "https://example.com"
-	urlTimeout = "http://example.com:8000/submit"
-)
+type testData struct {
+	timeout    time.Duration
+	syn        *synchron
+	urlBad     string
+	urlValid   string
+	urlTimeout string
+}
+
+// getTestData returns default test data
+func getTestData() *testData {
+	timeout := 3 * time.Second
+	return &testData{
+		timeout:    timeout,
+		syn:        newSynchron(timeout, 1),
+		urlBad:     "https://example.com/%",
+		urlValid:   "https://example.com",
+		urlTimeout: "http://example.com:8000/submit",
+	}
+}
+
+// getTestConfig returns a default configuration with logging turned off
+func getTestConfig() *Config {
+	return configGetEmergencyConf()
+}
 
 // TestNewCrawlerFail tests a failing condition for the newCrawler() function
 func TestNewCrawlerFail(t *testing.T) {
-	_, err := newCrawler(urlBad, syn.results, timeout, 3)
+	test := getTestData()
+	_, err := newCrawler(test.urlBad, test.syn.results, test.timeout, 3)
 	if err == nil {
-		t.Errorf("newCrawler() should fail with invalid domain. URL : '%s'.", urlBad)
+		t.Errorf("newCrawler() should fail with invalid domain. URL : '%s'.", test.urlBad)
 	}
 }
 
 // TestInitialiseCrawler tests a failing condition for the initialiseCrawler() function
 func TestInitialiseCrawlerFail(t *testing.T) {
-	go signalHandler(syn)
+	test := getTestData()
+	go signalHandler(test.syn)
 
 	time.Sleep(200 * time.Millisecond)
 
-	c := initialiseCrawler(urlBad, syn)
+	conf := getTestConfig()
+
+	c := initialiseCrawler(test.urlBad, test.syn, conf)
 	if c != nil {
-		t.Errorf("initialiseCrawler() should fail with invalid domain. URL : '%s'.", urlBad)
+		t.Errorf("initialiseCrawler() should fail with invalid domain. URL : '%s'.", test.urlBad)
 	}
-	syn.group.Wait()
+	test.syn.group.Wait()
 }
 
 // TestScraperFail test a failing condition for the scraper method
 func TestScraperFail(t *testing.T) {
-	c := initialiseCrawler(urlValid, syn)
+	test := getTestData()
+	conf := getTestConfig()
+
+	c := initialiseCrawler(test.urlValid, test.syn, conf)
+
 	c.workerSync.Add(1)
-	go c.scraper(urlBad)
+	go c.scraper(test.urlBad)
 	c.workerSync.Wait()
 	result := <-c.results
 	if result.err == nil {
-		t.Errorf("scraper() should flag an error in the returning result. URL : '%s'.", urlBad)
+		t.Errorf("scraper() should flag an error in the returning result. URL : '%s'.", test.urlBad)
 	}
 }
 
 // TestDownloadFail tests a failing condition for the download function
 func TestDownloadFail(t *testing.T) {
-	var close = func(body io.ReadCloser) {
+	var closeBody = func(body io.ReadCloser) {
 		if body != nil {
 			_ = body.Close()
 		}
 	}
+	test := getTestData()
 
 	// Should fail on request building
-	body, err := download(urlBad, timeout)
+	body, err := download(test.urlBad, test.timeout)
 	if err == nil {
-		t.Errorf("download() should fail on invalid link. URL : '%s'", urlBad)
+		t.Errorf("download() should fail on invalid link. URL : '%s'", test.urlBad)
 	}
-	close(body)
+	closeBody(body)
 
 	// Should fail on request execution due to timeout
-	body, err = download(urlTimeout, timeout)
+	body, err = download(test.urlTimeout, test.timeout)
 	if err == nil {
-		t.Errorf("download() should timeout on non-ending request. URL : '%s'", urlTimeout)
+		t.Errorf("download() should timeout on non-ending request. URL : '%s'", test.urlTimeout)
 	}
-	close(body)
+	closeBody(body)
 }
 
 // TestHandleResult tests the right behaviour of handleResult() in case of an error in a result
 func TestHandleResult(t *testing.T) {
-	c := initialiseCrawler(urlValid, syn)
-	badResult := newResult(urlBad, nil)
+	test := getTestData()
+	conf := getTestConfig()
+
+	c := initialiseCrawler(test.urlValid, test.syn, conf)
+	badResult := newResult(test.urlBad, nil)
 	badResult.err = errors.New("this a test error")
 	c.handleResult(badResult)
 	_, visited := c.visited[badResult.URL]
@@ -85,9 +114,12 @@ func TestHandleResult(t *testing.T) {
 
 // TestHandleResultError tests handleResultError
 func TestHandleResultError(t *testing.T) {
-	c := initialiseCrawler(urlValid, syn)
+	test := getTestData()
+	conf := getTestConfig()
 
-	badResult := newResult(urlBad, nil)
+	c := initialiseCrawler(test.urlValid, test.syn, conf)
+
+	badResult := newResult(test.urlBad, nil)
 	badResult.err = errors.New("this a test error")
 
 	// Test case we re-enqueue the result

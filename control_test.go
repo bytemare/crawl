@@ -36,12 +36,12 @@ func TestFetchLinksSuccess(t *testing.T) {
 		{"https://bytema.re", 250 * time.Millisecond, ""},
 		{"https://bytema.re", 0 * time.Second, ""},
 	}
-	errMsg := "FetchLinks returned with error, but url and timeout are valid. URL : %s, timeout : %0.3fs."
+	errMsg := "FetchLinks returned with error, but url and timeout are valid. URL : %s, timeout : %0.3fs., error : %s"
 
 	for _, test := range succeed {
 		output, err := crawl.FetchLinks(test.url, test.timeout)
 		if err != nil || output == nil {
-			t.Errorf(errMsg, test.url, test.timeout.Seconds())
+			t.Errorf(errMsg, test.url, test.timeout.Seconds(), err)
 		}
 	}
 }
