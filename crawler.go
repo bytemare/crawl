@@ -86,9 +86,10 @@ func newResult(url string, links *[]string) *Result {
 	}
 }
 
-// ScrapLinks returns the links found in the web page pointed to by url
-func ScrapLinks(url string, timeout time.Duration) ([]string, error) {
+// scrapLinks returns the links found in the web page pointed to by url
+func scrapLinks(url string, timeout time.Duration) ([]string, error) {
 	// Retrieve page
+	log.WithField("url", url).Tracef("Attempting download.")
 	body, err := download(url, timeout)
 	defer func() {
 		if body != nil {
@@ -96,11 +97,28 @@ func ScrapLinks(url string, timeout time.Duration) ([]string, error) {
 		}
 	}()
 	if err != nil {
+		log.WithField("url", url).Tracef("Download failed.")
 		return nil, err
 	}
 
 	// Retrieve links
 	return extractLinks(url, body), nil
+}
+
+// download retrieves the web page pointed to by the given url
+func download(url string, timeout time.Duration) (io.ReadCloser, error) {
+	var client = &http.Client{
+		Timeout: timeout,
+	}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		return nil, err
+	}
+	return resp.Body, nil
 }
 
 // scraper serves a worker goroutine.
@@ -113,7 +131,7 @@ func (c *crawler) scraper(url string) {
 	res := newResult(url, nil)
 
 	// Scrap and retrieve links
-	links, err := ScrapLinks(url, c.requestTimeout)
+	links, err := scrapLinks(url, c.requestTimeout)
 	if err != nil {
 		res.err = err
 	} else {
@@ -130,24 +148,6 @@ func (c *crawler) scraper(url string) {
 	// Enqueue results
 	case c.results <- res:
 	}
-}
-
-// download retrieves the web page pointed to by the given url
-func download(url string, timeout time.Duration) (io.ReadCloser, error) {
-	var client = &http.Client{
-		Timeout: timeout,
-	}
-
-	log.WithField("url", url).Tracef("Attempting download.")
-	resp, err := client.Get(url)
-	if err != nil {
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
-		return nil, err
-	}
-	log.WithField("url", url).Tracef("Download succeeded.")
-	return resp.Body, nil
 }
 
 // filterHost filters out links that are different from the crawler's scope
@@ -250,8 +250,8 @@ func (c *crawler) checkProgress() bool {
 }
 
 // initialiseCrawler initialises and returns a new crawler struct
-func initialiseCrawler(domain string, syn *synchron) *crawler {
-	c, err := newCrawler(domain, syn.results, 5*time.Second, 3)
+func initialiseCrawler(domain string, syn *synchron, conf *Config) *crawler {
+	c, err := newCrawler(domain, syn.results, conf.Requests.Timeout, int(conf.Requests.Retries))
 	if err != nil {
 		log.WithField("url", domain).Error(err)
 		syn.sendQuitSignal()
@@ -271,10 +271,10 @@ func (c *crawler) quitCrawler(syn *synchron) {
 }
 
 // crawl manages worker goroutines scraping pages and prints results
-func crawl(domain string, syn *synchron) {
+func crawl(domain string, syn *synchron, conf *Config) {
 	defer syn.group.Done()
 
-	c := initialiseCrawler(domain, syn)
+	c := initialiseCrawler(domain, syn, conf)
 	if c == nil {
 		return
 	}
