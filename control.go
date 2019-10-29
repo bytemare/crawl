@@ -3,48 +3,12 @@ package crawl
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
-
-var log = logrus.New()
-
-// init is called when package is loaded, to set logging parameters
-func init() {
-	logging := true
-	defLogFilePath := "./log-crawler.log"
-	defLogFilePerms := 0666
-
-	// Enable or disable all logging
-	if !logging {
-		log.SetOutput(ioutil.Discard)
-	} else {
-		// Set logging level
-		log.SetLevel(logrus.TraceLevel)
-
-		// Set logging output
-		log2File(defLogFilePath, os.FileMode(defLogFilePerms))
-
-		// Set logging format
-		log.SetFormatter(&logrus.JSONFormatter{})
-	}
-}
-
-// log2File switches logging to be output to file only
-func log2File(logFile string, perms os.FileMode) {
-	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, perms)
-	if err == nil {
-		log.SetOutput(file)
-	} else {
-		log.Info("Failed to log to file, using default stderr.")
-	}
-}
 
 // timer implements a timeout (should be called as a goroutine)
 func timer(syn *synchron) {
@@ -83,9 +47,8 @@ func signalHandler(syn *synchron) {
 
 	// Block until a signal is received
 	<-sig
-
 	if syn.checkout() {
-		log.Info("signalHandler received a signal. Stopping.")
+		// fixme : this somehow doesn't work on windows
 		syn.stopChan <- struct{}{} // for timer
 		syn.stopChan <- struct{}{} // for crawler
 	}
@@ -114,10 +77,10 @@ func validateInput(domain string, timeout time.Duration) error {
 }
 
 // startCrawling launches the goroutines that constitute the crawler implementation.
-func startCrawling(domain string, syn *synchron) {
+func startCrawling(domain string, syn *synchron, config *Config) {
 	go signalHandler(syn)
 	go timer(syn)
-	go crawl(domain, syn)
+	go crawl(domain, syn, config)
 
 	syn.group.Wait()
 
@@ -130,6 +93,12 @@ func startCrawling(domain string, syn *synchron) {
 // when all encountered links have been visited and none is left, when the deadline on the timeout parameter is reached,
 // or if a SIGINT or SIGTERM signals is received.
 func StreamLinks(domain string, timeout time.Duration) (outputChan chan *Result, err error) {
+	// Check env and initialise logging
+	conf, err := initialiseCrawlConfiguration()
+	if err != nil && conf == nil {
+		return nil, err
+	}
+
 	if err = validateInput(domain, timeout); err != nil {
 		return nil, err
 	}
@@ -137,7 +106,7 @@ func StreamLinks(domain string, timeout time.Duration) (outputChan chan *Result,
 	syn := newSynchron(timeout, 3)
 	log.WithField("url", domain).Info("Starting web crawler.")
 
-	go startCrawling(domain, syn)
+	go startCrawling(domain, syn, conf)
 
 	return syn.results, nil
 }
@@ -157,4 +126,14 @@ func FetchLinks(domain string, timeout time.Duration) ([]string, error) {
 	}
 
 	return links, nil
+}
+
+// ScrapLinks returns the links found in the web page pointed to by url
+func ScrapLinks(url string, timeout time.Duration) ([]string, error) {
+	// Check env and initialise logging
+	conf, err := initialiseCrawlConfiguration()
+	if err != nil && conf == nil {
+		return nil, err
+	}
+	return scrapLinks(url, timeout)
 }
