@@ -6,7 +6,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-type Test struct {
+type linksTest struct {
 	valid   string
 	invalid string
 	errMsg  string
@@ -14,7 +14,7 @@ type Test struct {
 
 // TestSanitiseFail tests special cases with special characters found in URL, that should bring URL.Parse() to fail
 func TestSanitiseFail(t *testing.T) {
-	tests := []Test{
+	tests := []linksTest{
 		{"https://example.com/resource/is-here", "https://example.com/\r\n",
 			"sanitise() should fail on calling url.Parse() with error from parse() : contains ASCII control characters."},
 		{"https://example.com/resource/is-here", "https://example.com/%",

@@ -250,7 +250,7 @@ func (c *crawler) checkProgress() bool {
 }
 
 // initialiseCrawler initialises and returns a new crawler struct
-func initialiseCrawler(domain string, syn *synchron, conf *Config) *crawler {
+func initialiseCrawler(domain string, syn *synchron, conf *config) *crawler {
 	c, err := newCrawler(domain, syn.results, conf.Requests.Timeout, int(conf.Requests.Retries))
 	if err != nil {
 		log.WithField("url", domain).Error(err)
@@ -271,7 +271,7 @@ func (c *crawler) quitCrawler(syn *synchron) {
 }
 
 // crawl manages worker goroutines scraping pages and prints results
-func crawl(domain string, syn *synchron, conf *Config) {
+func crawl(domain string, syn *synchron, conf *config) {
 	defer syn.group.Done()
 
 	c := initialiseCrawler(domain, syn, conf)

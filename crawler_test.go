@@ -28,7 +28,7 @@ func getTestData() *testData {
 }
 
 // getTestConfig returns a default configuration with logging turned off
-func getTestConfig() *Config {
+func getTestConfig() *config {
 	return configGetEmergencyConf()
 }
 

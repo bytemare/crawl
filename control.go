@@ -77,7 +77,7 @@ func validateInput(domain string, timeout time.Duration) error {
 }
 
 // startCrawling launches the goroutines that constitute the crawler implementation.
-func startCrawling(domain string, syn *synchron, config *Config) {
+func startCrawling(domain string, syn *synchron, config *config) {
 	go signalHandler(syn)
 	go timer(syn)
 	go crawl(domain, syn, config)
