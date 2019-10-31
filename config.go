@@ -20,9 +20,9 @@ func configFile() string {
 	return "configs/config.yml"
 }
 
-// Config holds the crawler's secondary running parameters
+// config holds the crawler's secondary running parameters
 // Environment variables overwrite configuration file values.
-type Config struct {
+type config struct {
 	Requests struct {
 		Timeout time.Duration `yaml:"timeout" envconfig:"CRAWLER_REQ_TIMEOUT"`
 		Retries uint          `yaml:"retries" envconfig:"CRAWLER_REQ_RETRIES"`
@@ -55,8 +55,8 @@ func configGetEnvKeys() []string {
 
 // configGetEmergencyConf returns a minimal configuration only used when no config file or env vars are set
 // Warning : logging is disabled.
-func configGetEmergencyConf() *Config {
-	return &Config{
+func configGetEmergencyConf() *config {
+	return &config{
 		Requests: struct {
 			Timeout time.Duration `yaml:"timeout" envconfig:"CRAWLER_REQ_TIMEOUT"`
 			Retries uint          `yaml:"retries" envconfig:"CRAWLER_REQ_RETRIES"`
@@ -73,7 +73,7 @@ func configGetEmergencyConf() *Config {
 }
 
 // initialiseCrawlConfiguration attempts to load the configuration from environment variables and a configuration file.
-// If all environment variables are set, returns a Config containing their values.
+// If all environment variables are set, returns a config containing their values.
 // If some or all environment variables are missing, attempts to load a configuration from the default config file,
 // and patches the missing environment variables.
 // If no configuration file was found, an emergency configuration with minimal default values is spawned to patch the
@@ -84,23 +84,18 @@ func configGetEmergencyConf() *Config {
 // 	- a config file is present but reading it failed
 //	- an emergency configuration is used
 //
-// Note : When an emergency configuration is used, the env vars are populated and this function returns a valid Config
-func initialiseCrawlConfiguration() (*Config, error) {
-	// Load environment variables into Config
-	envConf, err := configLoadEnv()
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if environment variables are missing. If not, return them as Config
+// Note : When an emergency configuration is used, the env vars are populated and this function returns a valid config
+func initialiseCrawlConfiguration() (*config, error) {
+	// Check if environment variables are missing. If not, return them as config
 	missing := configCheckEnv()
 	if len(missing) == 0 {
-		return envConf, nil
+		// Load and return environment variables into config
+		return configLoadEnv()
 	}
 
 	// Here, env vars are not set or some are missing
 	// Check is config file is present and if we can load it
-	var fileConf Config
+	var fileConf config
 	isPresent, err := configLoadFile(&fileConf, configFile())
 	if isPresent && err != nil {
 		return nil, err
@@ -121,8 +116,8 @@ func initialiseCrawlConfiguration() (*Config, error) {
 		return nil, err
 	}
 
-	// Reload env vars to Config
-	envConf, err = configLoadEnv()
+	// Reload env vars to config
+	envConf, err := configLoadEnv()
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +141,7 @@ func configCheckEnv() []string {
 }
 
 // configInitLogging sets logging behaviour
-func configInitLogging(conf *Config) {
+func configInitLogging(conf *config) {
 	// Enable or disable all logging
 	if !conf.Logging.Do {
 		log.SetOutput(ioutil.Discard)
@@ -181,15 +176,10 @@ func log2File(logFile string, perms os.FileMode) {
 }
 
 // configPatchEnv populates missing environment variables with values found in the configuration file
-//func configPatchEnv(envConf *Config, missing []string, fileConf *Config) error {
-func configPatchEnv(missing []string, fileConf *Config) error {
+func configPatchEnv(missing []string, fileConf *config) error {
 	fileVal := reflect.ValueOf(*fileConf)
 
 	for _, envName := range missing {
-		/*if err := configSetMissingEnvVar(envConf, envName, fileVal); err != nil {
-			return err
-		}*/
-
 		// Get value of missing var from config file
 		val, err := configGetValFromTag(envName, fileVal)
 		if err != nil {
@@ -197,15 +187,11 @@ func configPatchEnv(missing []string, fileConf *Config) error {
 		}
 
 		// Update the environment variable with value
-		if err := os.Setenv(envName, fmt.Sprintf("%v", val)); err != nil {
-			fmt.Printf("Error in setting env var\n")
-			return err
+		value := fmt.Sprintf("%v", val)
+		if err := os.Setenv(envName, value); err != nil {
+			msg := fmt.Sprintf("Error in setting env var '%s:%s' : %s.", envName, value, err)
+			return errors.New(msg)
 		}
-
-		// Update the environment Config with value
-		/*if err := configUpdateEnvConfig(envConf, envName, val); err != nil {
-			return err
-		}*/
 	}
 
 	return nil
@@ -233,19 +219,8 @@ func configGetValFromTag(key string, value reflect.Value) (interface{}, error) {
 	return nil, fmt.Errorf("could not find key '%s' in struct '%s'", key, value.Type())
 }
 
-// configUpdateEnvConfig populates key:value in conf
-/*func configUpdateEnvConfig(conf *Config, key string, value interface{}) error {
-	yamlVal := key + ": " + fmt.Sprintf("%v", value)
-	decoder := yaml.NewDecoder(strings.NewReader(yamlVal))
-	if err := decoder.Decode(conf); err != nil {
-		msg := fmt.Sprintf("Unable to update env Config : %s", err)
-		return errors.New(msg)
-	}
-	return nil
-}*/
-
 // configLoadFile loads the crawler's configuration from filePath
-func configLoadFile(config *Config, filePath string) (bool, error) {
+func configLoadFile(config *config, filePath string) (bool, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to open config file : %s", err)
@@ -263,8 +238,8 @@ func configLoadFile(config *Config, filePath string) (bool, error) {
 }
 
 // configLoadEnv loads the crawler's configuration from environment variables
-func configLoadEnv() (*Config, error) {
-	var config Config
+func configLoadEnv() (*config, error) {
+	var config config
 	err := envconfig.Process("", &config)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to gather Env vars for configuration : %s", err)
@@ -272,3 +247,14 @@ func configLoadEnv() (*Config, error) {
 	}
 	return &config, nil
 }
+
+// configUpdateEnvConfig populates key:value in conf
+/*func configUpdateEnvConfig(conf *config, key string, value interface{}) error {
+	yamlVal := key + ": " + fmt.Sprintf("%v", value)
+	decoder := yaml.NewDecoder(strings.NewReader(yamlVal))
+	if err := decoder.Decode(conf); err != nil {
+		msg := fmt.Sprintf("Unable to update env config : %s", err)
+		return errors.New(msg)
+	}
+	return nil
+}*/
