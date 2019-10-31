@@ -44,17 +44,39 @@ func TestNewCrawlerFail(t *testing.T) {
 // TestInitialiseCrawler tests a failing condition for the initialiseCrawler() function
 func TestInitialiseCrawlerFail(t *testing.T) {
 	test := getTestData()
-	go signalHandler(test.syn)
-
-	time.Sleep(200 * time.Millisecond)
-
 	conf := getTestConfig()
+
+	// Launch signal handler and sleep to wait until it's set up
+	go signalHandler(test.syn)
+	time.Sleep(200 * time.Millisecond)
 
 	c := initialiseCrawler(test.urlBad, test.syn, conf)
 	if c != nil {
 		t.Errorf("initialiseCrawler() should fail with invalid domain. URL : '%s'.", test.urlBad)
 	}
 	test.syn.group.Wait()
+}
+
+// TestCrawlFail should immediately return when initialiseCrawler fails
+func TestCrawlFail(t *testing.T) {
+	test := getTestData()
+	conf := getTestConfig()
+
+	// use a timeout to measure if crawler is running
+	timeout := time.After(1 * time.Second)
+	done := make(chan struct{})
+
+	go func() {
+		go crawl(test.urlBad, test.syn, conf)
+		test.syn.group.Wait()
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-timeout:
+		t.Error("crawler() should not run when calling initialiseCrawler() failed.")
+	case <-done:
+	}
 }
 
 // TestScraperFail test a failing condition for the scraper method
