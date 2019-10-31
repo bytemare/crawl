@@ -1,13 +1,11 @@
-package crawl_test
+package crawl
 
 import (
 	"testing"
 	"time"
-
-	"github.com/bytemare/crawl"
 )
 
-type Test struct {
+type controlTest struct {
 	url     string
 	timeout time.Duration
 	errMsg  string
@@ -15,14 +13,14 @@ type Test struct {
 
 // TestFetchLinksFail tests cases where FetchLinks is supposed to fail and/or return an error
 func TestFetchLinksFail(t *testing.T) {
-	failing := []Test{
+	failing := []controlTest{
 		{"", 0 * time.Second, "FetchLinks returned without error, but url is empty."},
 		{"bytema.re", 0 * time.Second, "FetchLinks returned without error, but url is invalid."},
 		{"https://bytema.re", -10 * time.Second, "FetchLinks returned without error, but timeout is invalid."},
 	}
 
 	for _, test := range failing {
-		output, err := crawl.FetchLinks(test.url, test.timeout)
+		output, err := FetchLinks(test.url, test.timeout)
 		if err == nil || output != nil {
 			t.Errorf("%s URL : %s, timeout %d.", test.errMsg, test.url, test.timeout)
 		}
@@ -31,7 +29,7 @@ func TestFetchLinksFail(t *testing.T) {
 
 // TestFetchLinksSuccess tests cases where FetchLinks is supposed to succeed
 func TestFetchLinksSuccess(t *testing.T) {
-	var succeed = []Test{
+	var succeed = []controlTest{
 		{"https://bytema.re", 10 * time.Second, ""},
 		{"https://bytema.re", 250 * time.Millisecond, ""},
 		{"https://bytema.re", 0 * time.Second, ""},
@@ -39,7 +37,7 @@ func TestFetchLinksSuccess(t *testing.T) {
 	errMsg := "FetchLinks returned with error, but url and timeout are valid. URL : %s, timeout : %0.3fs., error : %s"
 
 	for _, test := range succeed {
-		output, err := crawl.FetchLinks(test.url, test.timeout)
+		output, err := FetchLinks(test.url, test.timeout)
 		if err != nil || output == nil {
 			t.Errorf(errMsg, test.url, test.timeout.Seconds(), err)
 		}
@@ -51,7 +49,7 @@ func TestScrapLinksFail(t *testing.T) {
 	urlBad := "https://example.com/%"
 	timeout := 3 * time.Second
 
-	_, err := crawl.ScrapLinks(urlBad, timeout)
+	_, err := ScrapLinks(urlBad, timeout)
 	if err == nil {
 		t.Errorf("ScrapLinks() should fail on invalid URL. URL : '%s'.", urlBad)
 	}
