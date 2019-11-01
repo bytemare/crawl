@@ -2,6 +2,7 @@ package crawl
 
 import (
 	"os"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -63,6 +64,23 @@ func TestFetchLinksSuccess(t *testing.T) {
 			t.Errorf(errMsg, test.url, test.timeout.Seconds(), err)
 		}
 	}
+}
+
+//
+func TestFetchLinks(t *testing.T) {
+	url := "https://bytema.re"
+	timeout := time.Duration(0)
+	expected := []string{"https://bytema.re/author/bytemare/", "https://bytema.re/crypto/", "https://bytema.re/tutos/", "https://bytema.re/x/", "https://bytema.re/compiling/]"}
+
+	output, err := FetchLinks(url, timeout)
+	if len(output) == 0 || err != nil {
+		t.Errorf("FetchLinks should return results for '%s'\n", url)
+	} else {
+		if reflect.DeepEqual(output, expected) {
+			t.Errorf("FetchLinks returned different result from what is expected.\n\t\tResult : '%s'\n\t\tExpected : '%s'\n", output, expected)
+		}
+	}
+
 }
 
 // TestScrapLinksFail tests failing conditions for ScrapLinks()
