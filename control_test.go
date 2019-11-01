@@ -1,6 +1,7 @@
 package crawl
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -25,6 +26,26 @@ func TestFetchLinksFail(t *testing.T) {
 			t.Errorf("%s URL : %s, timeout %d.", test.errMsg, test.url, test.timeout)
 		}
 	}
+
+	// Set up failing condition for config initialisation
+	urlBad := "https://example.com/%"
+	timeout := 3 * time.Second
+	test := getConfigTest()
+	_ = os.Rename(test.validConfigFile, test.backupConfigFile)
+	env := getEnv()
+	os.Clearenv()
+
+	// Place an invalid phony config file
+	_ = os.Link(test.invalidConfigFile, test.validConfigFile)
+
+	output, err := FetchLinks(urlBad, timeout)
+	if err == nil || output != nil {
+		t.Error("FetchLinks() should fail when config fails.")
+	}
+
+	// Restore config file and env vars
+	restoreEnv(env)
+	_ = os.Rename(test.backupConfigFile, test.validConfigFile)
 }
 
 // TestFetchLinksSuccess tests cases where FetchLinks is supposed to succeed
@@ -44,7 +65,7 @@ func TestFetchLinksSuccess(t *testing.T) {
 	}
 }
 
-// TestScrapLinksFail tests a failing condition for ScrapLinks()
+// TestScrapLinksFail tests failing conditions for ScrapLinks()
 func TestScrapLinksFail(t *testing.T) {
 	urlBad := "https://example.com/%"
 	timeout := 3 * time.Second
@@ -53,6 +74,24 @@ func TestScrapLinksFail(t *testing.T) {
 	if err == nil {
 		t.Errorf("ScrapLinks() should fail on invalid URL. URL : '%s'.", urlBad)
 	}
+
+	// Set up failing condition for config initialisation
+	test := getConfigTest()
+	_ = os.Rename(test.validConfigFile, test.backupConfigFile)
+	env := getEnv()
+	os.Clearenv()
+
+	// Place an invalid phony config file
+	_ = os.Link(test.invalidConfigFile, test.validConfigFile)
+
+	_, err = ScrapLinks(urlBad, timeout)
+	if err == nil {
+		t.Error("ScrapLinks() should fail when config fails.")
+	}
+
+	// Restore config file and env vars
+	restoreEnv(env)
+	_ = os.Rename(test.backupConfigFile, test.validConfigFile)
 }
 
 /*

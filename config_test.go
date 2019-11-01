@@ -1,6 +1,7 @@
 package crawl
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -53,11 +54,24 @@ func TestConfigLoadFileFail(t *testing.T) {
 func TestConfigInitLoggingSuccess(t *testing.T) {
 	conf := getTestConfig()
 	conf.Logging.Do = true
+	conf.Logging.Level = 1
 	conf.Logging.Output = "file"
+	conf.Logging.File = "./log-crawler.log.test"
+	conf.Logging.Permissions = 0666
+
+	// Tests on
 	conf.Logging.Type = "json"
-	configInitLogging(conf)
+	if err := configInitLogging(conf); err != nil {
+		t.Errorf("init logging failed : '%s'.\n", err)
+	}
 	conf.Logging.Type = "text"
-	configInitLogging(conf)
+	if err := configInitLogging(conf); err != nil {
+		t.Errorf("init logging failed : '%s'.\n", err)
+	}
+
+	if err := os.Remove(conf.Logging.File); err != nil {
+		fmt.Printf("could not remove test log file '%s' : %s\n", conf.Logging.File, err)
+	}
 }
 
 func TestInitialiseCrawlConfigurationNoFileNoEnv(t *testing.T) {
