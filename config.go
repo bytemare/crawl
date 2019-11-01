@@ -123,7 +123,11 @@ func initialiseCrawlConfiguration() (*config, error) {
 	}
 
 	// Initialise logging
-	configInitLogging(envConf)
+	if err := configInitLogging(envConf); err != nil {
+		// fixme : when emergency config is used, it's error message is going to be ignored.
+		//  => Use 1.13 error handling.
+		return envConf, err
+	}
 
 	return envConf, emergency
 }
@@ -141,7 +145,7 @@ func configCheckEnv() []string {
 }
 
 // configInitLogging sets logging behaviour
-func configInitLogging(conf *config) {
+func configInitLogging(conf *config) (err error) {
 	// Enable or disable all logging
 	if !conf.Logging.Do {
 		log.SetOutput(ioutil.Discard)
@@ -151,7 +155,7 @@ func configInitLogging(conf *config) {
 
 		// Set logging output
 		if conf.Logging.Output == "file" {
-			log2File(conf.Logging.File, os.FileMode(conf.Logging.Permissions))
+			err = log2File(conf.Logging.File, os.FileMode(conf.Logging.Permissions))
 		}
 
 		// Set logging format
@@ -163,16 +167,19 @@ func configInitLogging(conf *config) {
 		default:
 		}
 	}
+	return err
 }
 
 // log2File switches logging to be output to file only
-func log2File(logFile string, perms os.FileMode) {
-	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, perms)
+func log2File(logFile string, perms os.FileMode) (err error) {
+	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, perms)
 	if err == nil {
 		log.SetOutput(file)
 	} else {
-		log.Info("Failed to log to file, using default stderr.")
+		msg := fmt.Sprintf("Failed to set logging to file '%s', using default stderr. Error : %s", logFile, err)
+		err = errors.New(msg)
 	}
+	return err
 }
 
 // configPatchEnv populates missing environment variables with values found in the configuration file
