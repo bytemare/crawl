@@ -32,7 +32,6 @@ func getEnv() []string {
 }
 
 func (test *configTest) makeInvalidConfigFile(t *testing.T) bool {
-
 	// Backup configuration
 	if err := os.Rename(test.validConfigFile, test.backupConfigFile); err != nil {
 		t.Errorf("Could not backup/rename %s to %s : %s", test.validConfigFile, test.backupConfigFile, err)
@@ -99,8 +98,6 @@ func restoreConfigFileAndEnv(t *testing.T, test *configTest, env []string) {
 			t.Logf("Could not remove backup configfile %s : %s", test.backupConfigFile, err)
 		}
 	}
-
-	return
 }
 
 func TestConfigLoadFileFail(t *testing.T) {

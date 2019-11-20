@@ -83,11 +83,7 @@ func TestFetchLinks(t *testing.T) {
 		t.Errorf("FetchLinks should return results for '%s' : %s", url, err)
 	} else {
 		assert.ElementsMatch(t, expected, output)
-		/*if !reflect.DeepEqual(output, expected) {
-			t.Errorf("FetchLinks returned different result from what is expected.\n\t\tResult : '%s'\n\t\tExpected : '%s'\n", output, expected)
-		}*/
 	}
-
 }
 
 // TestScrapLinksFail tests failing conditions for ScrapLinks()
@@ -122,7 +118,6 @@ restore:
 
 // TestFetchLinksInterrupt simulates a crawling with signal interrupt
 func TestFetchLinksInterrupt(t *testing.T) {
-
 	signalTime := 1 * time.Second
 	done := make(chan struct{})
 

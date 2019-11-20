@@ -47,7 +47,6 @@ func signalHandler(syn *synchron) {
 
 	// Block until a signal or stop is received
 	select {
-
 	case <-sig:
 		syn.notifyStop("Received Signal")
 		break
