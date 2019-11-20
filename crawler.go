@@ -254,7 +254,7 @@ func initialiseCrawler(domain string, syn *synchron, conf *config) *crawler {
 	c, err := newCrawler(domain, syn.results, conf.Requests.Timeout, int(conf.Requests.Retries))
 	if err != nil {
 		log.WithField("url", domain).Error(err)
-		syn.sendQuitSignal()
+		syn.notifyStop("error in initialising crawler.")
 		return nil
 	}
 	c.todo <- c.domain.String()
@@ -267,7 +267,7 @@ func (c *crawler) quitCrawler(syn *synchron) {
 	log.WithField("url", c.domain.String()).Info("Stopping crawler.")
 	c.workerSync.Wait()
 	log.WithField("url", c.domain.String()).Infof("Visited %d links. %d failed.", len(c.visited), len(c.failed))
-	syn.sendQuitSignal()
+	syn.notifyStop("reached all links")
 }
 
 // crawl manages worker goroutines scraping pages and prints results
