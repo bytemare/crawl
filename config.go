@@ -233,6 +233,9 @@ func configLoadFile(config *config, filePath string) (bool, error) {
 		msg := fmt.Sprintf("Unable to open config file : %s", err)
 		return false, errors.New(msg)
 	}
+	defer func() {
+		_ = file.Close()
+	}()
 
 	decoder := yaml.NewDecoder(file)
 	err = decoder.Decode(config)
