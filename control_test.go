@@ -2,9 +2,11 @@ package crawl
 
 import (
 	"os"
-	"reflect"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type controlTest struct {
@@ -15,6 +17,8 @@ type controlTest struct {
 
 // TestFetchLinksFail tests cases where FetchLinks is supposed to fail and/or return an error
 func TestFetchLinksFail(t *testing.T) {
+	var output []string
+	var err error
 	failing := []controlTest{
 		{"", 0 * time.Second, "FetchLinks returned without error, but url is empty."},
 		{"bytema.re", 0 * time.Second, "FetchLinks returned without error, but url is invalid."},
@@ -32,21 +36,22 @@ func TestFetchLinksFail(t *testing.T) {
 	urlBad := "https://example.com/%"
 	timeout := 3 * time.Second
 	test := getConfigTest()
-	_ = os.Rename(test.validConfigFile, test.backupConfigFile)
 	env := getEnv()
 	os.Clearenv()
 
 	// Place an invalid phony config file
-	_ = os.Link(test.invalidConfigFile, test.validConfigFile)
+	if !test.makeInvalidConfigFile(t) {
+		goto restore
+	}
 
-	output, err := FetchLinks(urlBad, timeout)
+	output, err = FetchLinks(urlBad, timeout)
 	if err == nil || output != nil {
 		t.Error("FetchLinks() should fail when config fails.")
 	}
 
 	// Restore config file and env vars
-	restoreEnv(env)
-	_ = os.Rename(test.backupConfigFile, test.validConfigFile)
+restore:
+	restoreConfigFileAndEnv(t, test, env)
 }
 
 // TestFetchLinksSuccess tests cases where FetchLinks is supposed to succeed
@@ -70,15 +75,17 @@ func TestFetchLinksSuccess(t *testing.T) {
 func TestFetchLinks(t *testing.T) {
 	url := "https://bytema.re"
 	timeout := time.Duration(0)
-	expected := []string{"https://bytema.re/author/bytemare/", "https://bytema.re/crypto/", "https://bytema.re/tutos/", "https://bytema.re/x/", "https://bytema.re/compiling/]"}
+	expected := []string{"https://bytema.re/author/bytemare/", "https://bytema.re/crypto/", "https://bytema.re/tutos/",
+		"https://bytema.re/x/", "https://bytema.re/compiling/"}
 
 	output, err := FetchLinks(url, timeout)
 	if len(output) == 0 || err != nil {
-		t.Errorf("FetchLinks should return results for '%s'\n", url)
+		t.Errorf("FetchLinks should return results for '%s' : %s", url, err)
 	} else {
-		if reflect.DeepEqual(output, expected) {
+		assert.ElementsMatch(t, expected, output)
+		/*if !reflect.DeepEqual(output, expected) {
 			t.Errorf("FetchLinks returned different result from what is expected.\n\t\tResult : '%s'\n\t\tExpected : '%s'\n", output, expected)
-		}
+		}*/
 	}
 
 }
@@ -95,12 +102,13 @@ func TestScrapLinksFail(t *testing.T) {
 
 	// Set up failing condition for config initialisation
 	test := getConfigTest()
-	_ = os.Rename(test.validConfigFile, test.backupConfigFile)
 	env := getEnv()
 	os.Clearenv()
 
 	// Place an invalid phony config file
-	_ = os.Link(test.invalidConfigFile, test.validConfigFile)
+	if !test.makeInvalidConfigFile(t) {
+		goto restore
+	}
 
 	_, err = ScrapLinks(urlBad, timeout)
 	if err == nil {
@@ -108,32 +116,36 @@ func TestScrapLinksFail(t *testing.T) {
 	}
 
 	// Restore config file and env vars
-	restoreEnv(env)
-	_ = os.Rename(test.backupConfigFile, test.validConfigFile)
+restore:
+	restoreConfigFileAndEnv(t, test, env)
 }
 
-/*
 // TestFetchLinksInterrupt simulates a crawling with signal interrupt
 func TestFetchLinksInterrupt(t *testing.T) {
 
-	signalTime := 1 * time.Second
+	signalTime := 3 * time.Second
+	done := make(chan struct{})
 
 	var sendSignal = func(wait time.Duration) {
 		time.Sleep(wait)
-		p, _ := os.FindProcess(os.Getpid())
-		_ = p.Signal(os.Interrupt)
-	}
-
-	tests := []Test{
-		{"https://github.com/bytemare", signalTime + 2*time.Second, ""},
-	}
-
-	for _, test := range tests {
-		sendSignal(signalTime)
-		output, err := crawl.FetchLinks(test.url, test.timeout)
-		if err != nil || output == nil {
-			t.Errorf("Error in testing with signal. URL : %s, timeout : %0.3fs.", test.url, test.timeout.Seconds())
+		pid := os.Getpid()
+		p, err := os.FindProcess(pid)
+		if err != nil {
+			t.Logf("Couldn't find process : %s\n", err)
 		}
+
+		if err := p.Signal(syscall.SIGTERM); err != nil {
+			t.Logf("Couldn't send signal :%s\n", err)
+		}
+		done <- struct{}{}
 	}
+
+	test := getTestData()
+
+	go sendSignal(signalTime)
+	output, err := FetchLinks(test.urlTimeout, test.timeout)
+	if err != nil || output == nil {
+		t.Errorf("Error in testing with signal. URL : %s, timeout : %0.3fs.", test.urlTimeout, test.timeout.Seconds())
+	}
+	<-done
 }
-*/

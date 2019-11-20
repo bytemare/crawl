@@ -46,15 +46,10 @@ func TestInitialiseCrawlerFail(t *testing.T) {
 	test := getTestData()
 	conf := getTestConfig()
 
-	// Launch signal handler and sleep to wait until it's set up
-	go signalHandler(test.syn)
-	time.Sleep(200 * time.Millisecond)
-
 	c := initialiseCrawler(test.urlBad, test.syn, conf)
 	if c != nil {
 		t.Errorf("initialiseCrawler() should fail with invalid domain. URL : '%s'.", test.urlBad)
 	}
-	test.syn.group.Wait()
 }
 
 // TestCrawlFail should immediately return when initialiseCrawler fails

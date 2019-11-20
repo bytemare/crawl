@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type configTest struct {
@@ -17,8 +19,8 @@ type configTest struct {
 func getConfigTest() *configTest {
 	conf := &configTest{
 		validConfigFile:   configFile(),
-		backupConfigFile:  configFile() + "backup",
-		invalidConfigFile: "config_test.go",
+		backupConfigFile:  configFile() + ".backup",
+		invalidConfigFile: configFile() + ".invalid",
 		nonExistFile:      configFile() + ".delete",
 	}
 	_ = os.Remove(conf.nonExistFile)
@@ -29,11 +31,58 @@ func getEnv() []string {
 	return os.Environ()
 }
 
+func (test *configTest) makeInvalidConfigFile(t *testing.T) bool {
+
+	// Backup configuration
+	if err := os.Rename(test.validConfigFile, test.backupConfigFile); err != nil {
+		t.Errorf("Could not backup/rename %s to %s : %s", test.validConfigFile, test.backupConfigFile, err)
+		return false
+	}
+
+	// Create phony file
+	f, err := os.OpenFile(test.validConfigFile, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	defer func() {
+		_ = f.Close()
+	}()
+	if err != nil {
+		t.Errorf("Could not create fake config file %s : %s", test.validConfigFile, err)
+		return false
+	}
+	_, _ = f.WriteString("Invalid content\n  for a yaml file\n")
+	return true
+}
+
 func restoreEnv(env []string) {
 	for _, e := range env {
 		kv := strings.Split(e, "=")
 		_ = os.Setenv(kv[0], kv[1])
 	}
+}
+
+func backupConfigFileAndEnv(t *testing.T, test *configTest) ([]string, bool) {
+	if err := os.Rename(test.validConfigFile, test.backupConfigFile); err != nil {
+		t.Errorf("Could not backup/rename %s to %s", test.validConfigFile, test.backupConfigFile)
+		return nil, false
+	}
+	return getEnv(), true
+}
+
+func restoreConfigFileAndEnv(t *testing.T, test *configTest, env []string) bool {
+	restoreEnv(env)
+	if err := os.Remove(test.validConfigFile); err != nil {
+		t.Logf("Could not remove valid configfile (%s) before backup : %s", test.validConfigFile, err)
+	}
+	if err := os.Rename(test.backupConfigFile, test.validConfigFile); err != nil {
+		t.Errorf("Could not backup/rename %s to %s : %s", test.validConfigFile, test.backupConfigFile, err)
+		return false
+	}
+
+	// Remove backup file
+	if err := os.Remove(test.backupConfigFile); err != nil {
+		t.Logf("Could not remove backup configfile %s : %s", test.backupConfigFile, err)
+	}
+
+	return true
 }
 
 func TestConfigLoadFileFail(t *testing.T) {
@@ -74,55 +123,59 @@ func TestConfigInitLoggingSuccess(t *testing.T) {
 	}
 }
 
+// Test case when hardcoded config file is not there, and env vars not set
 func TestInitialiseCrawlConfigurationNoFileNoEnv(t *testing.T) {
 	test := getConfigTest()
 	defConf := getTestConfig()
 
 	// Backup config file and env vars
-	_ = os.Rename(test.validConfigFile, test.backupConfigFile)
-	env := getEnv()
+	env, ok := backupConfigFileAndEnv(t, test)
+	if !ok {
+		return
+	}
 	os.Clearenv()
 
-	// Test case when hardcoded config file is not there, and env vars not set
-	_ = os.Rename(test.validConfigFile, test.backupConfigFile)
-
 	conf, _ := initialiseCrawlConfiguration()
-	if *conf != *defConf {
-		t.Error("if env vars not set and no config file, should set emergency env.")
-	}
+
+	assert.Equal(t, *defConf, *conf)
+	/*
+		if *conf != *defConf {
+			t.Error("if env vars not set and no config file, should set emergency env.")
+		}*/
 
 	// Restore config file and env vars
-	restoreEnv(env)
-	_ = os.Rename(test.backupConfigFile, test.validConfigFile)
+	restoreConfigFileAndEnv(t, test, env)
 }
 
 func TestInitialiseCrawlConfigurationInvalidConfigFile(t *testing.T) {
+	var err error
 	test := getConfigTest()
 
 	// Backup config file and env vars and clear them
-	_ = os.Rename(test.validConfigFile, test.backupConfigFile)
 	env := getEnv()
 	os.Clearenv()
 
 	// Place an invalid phony config file
-	_ = os.Link(test.invalidConfigFile, test.validConfigFile)
+	if !test.makeInvalidConfigFile(t) {
+		goto restore
+	}
 
 	// Test case where there are missing environment vars, config file is present but could not be parsed
-	_, err := initialiseCrawlConfiguration()
+	_, err = initialiseCrawlConfiguration()
 	if err == nil {
 		t.Error("initialiseCrawlConfiguration() should fail if config file is not a valid yaml file.")
 	}
 
 	// Restore config file and env vars
-	restoreEnv(env)
-	_ = os.Rename(test.backupConfigFile, test.validConfigFile)
+restore:
+	restoreConfigFileAndEnv(t, test, env)
 }
 
 func TestInitialiseCrawlConfigurationSuccess(t *testing.T) {
 	var fileConf config
 	isPresent, err := configLoadFile(&fileConf, configFile())
 	if !isPresent || err != nil {
-		t.Error("This test demands a valid configuration file is present and used.")
+		t.Errorf("This test demands a valid configuration file is present and used : %s", err)
 		return
 	}
 
