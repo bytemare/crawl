@@ -123,7 +123,7 @@ restore:
 // TestFetchLinksInterrupt simulates a crawling with signal interrupt
 func TestFetchLinksInterrupt(t *testing.T) {
 
-	signalTime := 3 * time.Second
+	signalTime := 1 * time.Second
 	done := make(chan struct{})
 
 	var sendSignal = func(wait time.Duration) {
@@ -143,8 +143,8 @@ func TestFetchLinksInterrupt(t *testing.T) {
 	test := getTestData()
 
 	go sendSignal(signalTime)
-	output, err := FetchLinks(test.urlTimeout, test.timeout)
-	if err != nil || output == nil {
+	output, err := FetchLinks(test.urlValid, test.timeout)
+	if err != nil || len(output) == 5 {
 		t.Errorf("Error in testing with signal. URL : %s, timeout : %0.3fs.", test.urlTimeout, test.timeout.Seconds())
 	}
 	<-done

@@ -67,22 +67,40 @@ func backupConfigFileAndEnv(t *testing.T, test *configTest) ([]string, bool) {
 	return getEnv(), true
 }
 
-func restoreConfigFileAndEnv(t *testing.T, test *configTest, env []string) bool {
-	restoreEnv(env)
-	if err := os.Remove(test.validConfigFile); err != nil {
-		t.Logf("Could not remove valid configfile (%s) before backup : %s", test.validConfigFile, err)
+func fileExists(path string) bool {
+	if _, err := os.Stat(path); err == nil {
+		return true
 	}
+	return false
+}
+
+func restoreConfigFileAndEnv(t *testing.T, test *configTest, env []string) {
+	restoreEnv(env)
+
+	// If we have a backup, remove original and backup
+	if !fileExists(test.backupConfigFile) {
+		return
+	}
+
+	if fileExists(test.validConfigFile) {
+		if err := os.Remove(test.validConfigFile); err != nil {
+			t.Logf("Could not remove valid configfile (%s) before backup : %s", test.validConfigFile, err)
+		}
+	}
+
 	if err := os.Rename(test.backupConfigFile, test.validConfigFile); err != nil {
 		t.Errorf("Could not backup/rename %s to %s : %s", test.validConfigFile, test.backupConfigFile, err)
-		return false
+		return
 	}
 
 	// Remove backup file
-	if err := os.Remove(test.backupConfigFile); err != nil {
-		t.Logf("Could not remove backup configfile %s : %s", test.backupConfigFile, err)
+	if fileExists(test.backupConfigFile) {
+		if err := os.Remove(test.backupConfigFile); err != nil {
+			t.Logf("Could not remove backup configfile %s : %s", test.backupConfigFile, err)
+		}
 	}
 
-	return true
+	return
 }
 
 func TestConfigLoadFileFail(t *testing.T) {
