@@ -1,17 +1,12 @@
 language: go
 
-go:
-  - 1.12
-  - 1.13
-  - tip
-
 env:
   - GO111MODULE=on
 
 branches:
   only:
-  - dev
-  - master
+    - dev
+    - master
 
 addons:
   sonarcloud:
@@ -25,26 +20,28 @@ git:
 notifications:
   email: false
 
-matrix:
+jobs:
   include:
-    - os: linux
+    - go: "Analysis"
+        - '1.13'
+      os: linux
       dist: trusty
-      go :
-        - 1.13
-        before_install:
-          - go get github.com/mattn/goveralls
-          - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
-        script :
-          - golangci-lint run ./...
-          - $GOPATH/bin/goveralls -service=travis-ci
-        after_success:
-          - sonar-scanner
-          - bash <(curl -s https://codecov.io/bash)
-    - os: osx
-    #- os: windows
-  #allow_failures:
-  #  - os: windows
-  fast_finish: true
+      install:
+        - tip
+        - go get github.com/mattn/goveralls
+        - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+      before_script:
+        - golangci-lint run ./...
+      after_success:
+        - sonar-scanner
+        - bash <(curl -s https://codecov.io/bash)
+        - $GOPATH/bin/goveralls -service=travis-ci
+    - go:
+      - '1.12'
+      - '1.11'
+      - os: linux
+        dist: trusty
+      - os: osx
 
 script:
   - go test -v -trace trace.out
