@@ -32,7 +32,7 @@ loop:
 		// When timeout is reached, inform of timeout, send signal, and quit
 		case t := <-timer:
 			log.Infof("Timing out after %0.3f seconds. time passed : %s\n", syn.timeout.Seconds(), t.String())
-			syn.sendQuitSignal()
+			syn.notifyStop("Timeout")
 			break loop
 		}
 	}
@@ -45,13 +45,18 @@ func signalHandler(syn *synchron) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
-	// Block until a signal is received
-	<-sig
-	if syn.checkout() {
-		// fixme : this somehow doesn't work on windows
-		syn.stopChan <- struct{}{} // for timer
-		syn.stopChan <- struct{}{} // for crawler
+	// Block until a signal or stop is received
+	select {
+
+	case <-sig:
+		syn.notifyStop("Received Signal")
+		break
+
+	case <-syn.stopChan:
+		break
 	}
+
+	signal.Stop(sig)
 }
 
 // validateInput returns whether input is valid and can be worked with
@@ -84,7 +89,7 @@ func startCrawling(domain string, syn *synchron, config *config) {
 
 	syn.group.Wait()
 
-	log.WithField("url", domain).Info("Shutting down.")
+	log.WithField("url", domain).Infof("Shutting down : %s", syn.stopContext)
 	close(syn.results)
 }
 
@@ -92,7 +97,7 @@ func startCrawling(domain string, syn *synchron, config *config) {
 // The caller should range over than channel to continuously retrieve messages. StreamLinks will close that channel
 // when all encountered links have been visited and none is left, when the deadline on the timeout parameter is reached,
 // or if a SIGINT or SIGTERM signals is received.
-func StreamLinks(domain string, timeout time.Duration) (outputChan chan *Result, err error) {
+func StreamLinks(domain string, timeout time.Duration) (chan *Result, error) {
 	// Check env and initialise logging
 	conf, err := initialiseCrawlConfiguration()
 	if err != nil && conf == nil {
@@ -119,7 +124,7 @@ func FetchLinks(domain string, timeout time.Duration) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	links := make([]string, 100) // todo : trade-off here, look if we really need that
+	links := make([]string, 0, 100) // todo : trade-off here, look if we really need that
 
 	for res := range results {
 		links = append(links, *res.Links...)

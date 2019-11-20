@@ -1,19 +1,19 @@
 package crawl
 
 import (
-	"os"
 	"sync"
 	"time"
 )
 
 // synchron holds the synchronisation tools and parameters
 type synchron struct {
-	timeout  time.Duration
-	results  chan *Result
-	stopChan chan struct{}
-	mutex    *sync.Mutex
-	group    sync.WaitGroup
-	stopFlag bool
+	timeout     time.Duration
+	results     chan *Result
+	stopChan    chan struct{}
+	mutex       *sync.Mutex
+	group       sync.WaitGroup
+	stopFlag    bool
+	stopContext string
 }
 
 // newSynchron returns an initialised synchron struct
@@ -31,7 +31,8 @@ func newSynchron(timeout time.Duration, nbParties int) *synchron {
 	return s
 }
 
-// checkout allows checks on the state of timeout for synchronisation. Only First call of this function returns true.
+// checkout reads state of the stop flag, toggling it if it is called the first time, and returns true in that case
+// So only First call of this function returns true.
 func (syn *synchron) checkout() bool {
 	syn.mutex.Lock()
 	defer syn.mutex.Unlock()
@@ -41,16 +42,17 @@ func (syn *synchron) checkout() bool {
 	return first
 }
 
-// sendQuitSignal sends a signal only once, to signal shutdown
-func (syn *synchron) sendQuitSignal() {
+// notifyStop notifies only once, on first call, to shutdown
+func (syn *synchron) notifyStop(stopContext string) {
+	// Only the first caller of checkout will have true returned
 	if syn.checkout() {
-		log.Info("Initiating shutdown.")
+		log.Infof("Initiating shutdown : %s", stopContext)
 
-		// Send interrupt signal to ourselves, intercepted by signalHandler
-		p, _ := os.FindProcess(os.Getpid())
-		_ = p.Signal(os.Interrupt)
+		// Register the reason/context for the shutdown
+		syn.stopContext = stopContext
 
-		// If timer is calling this function, crawler will pick the message, and inversely
+		// Sending messages to the two other listeners
+		syn.stopChan <- struct{}{}
 		syn.stopChan <- struct{}{}
 	}
 }
