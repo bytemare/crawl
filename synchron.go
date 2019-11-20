@@ -8,19 +8,19 @@ import (
 // synchron holds the synchronisation tools and parameters
 type synchron struct {
 	timeout     time.Duration
-	results     chan *Result
+	results     chan *LinkMap
 	stopChan    chan struct{}
 	mutex       *sync.Mutex
 	group       sync.WaitGroup
 	stopFlag    bool
-	stopContext string
+	exitContext string
 }
 
 // newSynchron returns an initialised synchron struct
 func newSynchron(timeout time.Duration, nbParties int) *synchron {
 	s := &synchron{
 		timeout:  timeout,
-		results:  make(chan *Result),
+		results:  make(chan *LinkMap),
 		group:    sync.WaitGroup{},
 		stopChan: make(chan struct{}, 2),
 		stopFlag: false,
@@ -43,13 +43,13 @@ func (syn *synchron) checkout() bool {
 }
 
 // notifyStop notifies only once, on first call, to shutdown
-func (syn *synchron) notifyStop(stopContext string) {
+func (syn *synchron) notifyStop(exitContext string) {
 	// Only the first caller of checkout will have true returned
 	if syn.checkout() {
-		log.Infof("Initiating shutdown : %s", stopContext)
+		log.Infof("Initiating shutdown : %s", exitContext)
 
 		// Register the reason/context for the shutdown
-		syn.stopContext = stopContext
+		syn.exitContext = exitContext
 
 		// Sending messages to the two other listeners
 		syn.stopChan <- struct{}{}

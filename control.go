@@ -1,14 +1,60 @@
 package crawl
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
+
+	"github.com/pkg/errors"
 )
+
+// Exit statuses indicate the context from which in the crawler returns
+const (
+	exitSignal  = "Received Signal"
+	exitTimeout = "Timeout"
+	exitLinks   = "Explored all Links"
+)
+
+const (
+	exitErrorInit  = "Error in initialising crawler"
+	exitErrorConf  = "Error in loading configuration"
+	exitErrorInput = "Error in input validation"
+)
+
+// CrawlerResults is send back to the caller, containing results and information about the crawling
+type CrawlerResults struct {
+	links       []string      // list of all encountered links
+	stream      chan *LinkMap // channel streaming results as they arrive
+	exitContext *string       // when the crawler returns, will hold the reason
+	contextLock *sync.Mutex
+}
+
+func newCrawlerResults(syn *synchron) *CrawlerResults {
+	return &CrawlerResults{
+		links:       nil,
+		stream:      syn.results,
+		exitContext: &syn.exitContext,
+		contextLock: &sync.Mutex{},
+	}
+}
+
+func (cr *CrawlerResults) Links() []string {
+	return cr.links
+}
+
+func (cr *CrawlerResults) Stream() <-chan *LinkMap {
+	return cr.stream
+}
+
+func (cr *CrawlerResults) ExitContext() string {
+	cr.contextLock.Lock()
+	defer cr.contextLock.Unlock()
+	return *cr.exitContext
+}
 
 // timer implements a timeout (should be called as a goroutine)
 func timer(syn *synchron) {
@@ -32,7 +78,7 @@ loop:
 		// When timeout is reached, inform of timeout, send signal, and quit
 		case t := <-timer:
 			log.Infof("Timing out after %0.3f seconds. time passed : %s\n", syn.timeout.Seconds(), t.String())
-			syn.notifyStop("Timeout")
+			syn.notifyStop(exitTimeout)
 			break loop
 		}
 	}
@@ -48,7 +94,7 @@ func signalHandler(syn *synchron) {
 	// Block until a signal or stop is received
 	select {
 	case <-sig:
-		syn.notifyStop("Received Signal")
+		syn.notifyStop(exitSignal)
 		break
 
 	case <-syn.stopChan:
@@ -88,7 +134,7 @@ func startCrawling(domain string, syn *synchron, config *config) {
 
 	syn.group.Wait()
 
-	log.WithField("url", domain).Infof("Shutting down : %s", syn.stopContext)
+	log.WithField("url", domain).Infof("Shutting down : %s", syn.exitContext)
 	close(syn.results)
 }
 
@@ -96,40 +142,40 @@ func startCrawling(domain string, syn *synchron, config *config) {
 // The caller should range over than channel to continuously retrieve messages. StreamLinks will close that channel
 // when all encountered links have been visited and none is left, when the deadline on the timeout parameter is reached,
 // or if a SIGINT or SIGTERM signals is received.
-func StreamLinks(domain string, timeout time.Duration) (chan *Result, error) {
+func StreamLinks(domain string, timeout time.Duration) (*CrawlerResults, error) {
 	// Check env and initialise logging
 	conf, err := initialiseCrawlConfiguration()
 	if err != nil && conf == nil {
-		return nil, err
+		return nil, errors.Wrap(err, exitErrorConf)
 	}
 
 	if err = validateInput(domain, timeout); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, exitErrorInput)
 	}
 
-	syn := newSynchron(timeout, 3)
 	log.WithField("url", domain).Info("Starting web crawler.")
+	syn := newSynchron(timeout, 3)
+	res := newCrawlerResults(syn)
 
 	go startCrawling(domain, syn, conf)
 
-	return syn.results, nil
+	return res, nil
 }
 
 // FetchLinks is a wrapper around StreamLinks and does the same, except it blocks and accumulates all links before
 // returning them to the caller.
-// todo : return indicator of stop condition : signal, timeout, end of tree
-func FetchLinks(domain string, timeout time.Duration) ([]string, error) {
-	results, err := StreamLinks(domain, timeout)
+func FetchLinks(domain string, timeout time.Duration) (*CrawlerResults, error) {
+	res, err := StreamLinks(domain, timeout)
 	if err != nil {
 		return nil, err
 	}
-	links := make([]string, 0, 100) // todo : trade-off here, look if we really need that
 
-	for res := range results {
-		links = append(links, *res.Links...)
+	res.links = make([]string, 0, 100) // todo : trade-off here, look if we really need that
+	for linkMap := range res.stream {
+		res.links = append(res.links, *linkMap.Links...)
 	}
 
-	return links, nil
+	return res, nil
 }
 
 // ScrapLinks returns the links found in the web page pointed to by url
@@ -137,7 +183,7 @@ func ScrapLinks(url string, timeout time.Duration) ([]string, error) {
 	// Check env and initialise logging
 	conf, err := initialiseCrawlConfiguration()
 	if err != nil && conf == nil {
-		return nil, err
+		return nil, errors.Wrap(err, exitErrorConf)
 	}
 	return scrapLinks(url, timeout)
 }

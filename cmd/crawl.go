@@ -24,14 +24,14 @@ func main() {
 
 	// Launch crawler
 	fmt.Println("Starting web crawler. You can interrupt the program any time with ctrl+c.")
-	resultChan, err := crawl.StreamLinks(domain, time.Duration(*timeout)*time.Second)
+	crawlerResult, err := crawl.StreamLinks(domain, time.Duration(*timeout)*time.Second)
 	if err != nil {
 		fmt.Printf("Error : %s\n", err)
 		os.Exit(1)
 	}
 
 	fmt.Println("Mapping only shows not yet visited links.")
-	for res := range resultChan {
+	for res := range crawlerResult.Stream() {
 		fmt.Printf("%s -> %s\n", res.URL, *res.Links)
 	}
 
