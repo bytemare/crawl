@@ -43,8 +43,8 @@ script:
   - go test -v -trace trace.out
   - go test -v -race -coverprofile=coverage.out -covermode=atomic
   - golangci-lint run ./...
-  - $GOPATH/bin/goveralls -service=travis-ci
 
 after_success:
   - sonar-scanner
   - bash <(curl -s https://codecov.io/bash)
+  - $GOPATH/bin/goveralls -service=travis-ci
