@@ -2,7 +2,7 @@ package crawl
 
 import (
 	"os"
-	"syscall"
+	"runtime"
 	"testing"
 	"time"
 
@@ -123,7 +123,12 @@ restore:
 
 // TestFetchLinksInterrupt simulates a crawling with signal interrupt
 func TestFetchLinksInterrupt(t *testing.T) {
-	signalTime := 1 * time.Second
+	// don't run this test on windows, since signals are not supported
+	if runtime.GOOS == "windows" {
+		return
+	}
+
+	signalTime := 2 * time.Second
 	done := make(chan struct{})
 
 	var sendSignal = func(wait time.Duration) {
@@ -134,8 +139,8 @@ func TestFetchLinksInterrupt(t *testing.T) {
 			t.Logf("Couldn't find process : %s\n", err)
 		}
 
-		if err := p.Signal(syscall.SIGTERM); err != nil {
-			t.Logf("Couldn't send signal :%s\n", err)
+		if err := p.Signal(os.Interrupt); err != nil {
+			t.Logf("Couldn't send signal : %s\n", err)
 		}
 		done <- struct{}{}
 	}
@@ -143,7 +148,7 @@ func TestFetchLinksInterrupt(t *testing.T) {
 	test := getTestData()
 
 	go sendSignal(signalTime)
-	crawlerResult, err := FetchLinks(test.urlValid, test.timeout)
+	crawlerResult, err := FetchLinks(test.urlTimeout, test.timeout)
 	if err != nil || crawlerResult == nil {
 		t.Errorf("Error in testing with signal. URL : %s, timeout : %0.3fs. : %s",
 			test.urlTimeout, test.timeout.Seconds(), err)

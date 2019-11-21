@@ -89,7 +89,8 @@ func signalHandler(syn *synchron) {
 	defer syn.group.Done()
 
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	// os.Interrupt and os.Kill are the only signal values guaranteed to be present on all systems (except windows)
+	signal.Notify(sig, os.Interrupt, os.Kill, syscall.SIGTERM)
 
 	// Block until a signal or stop is received
 	select {
