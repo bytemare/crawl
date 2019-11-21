@@ -2,6 +2,7 @@ package crawl
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -120,8 +121,13 @@ func TestConfigInitLoggingSuccess(t *testing.T) {
 	conf.Logging.Do = true
 	conf.Logging.Level = 1
 	conf.Logging.Output = "file"
-	conf.Logging.File = "./log-crawler.log.test"
 	conf.Logging.Permissions = 0666
+
+	file, err := ioutil.TempFile("", "*.log-crawler.log")
+	if err != nil {
+		log.Fatal(err)
+	}
+	conf.Logging.File = file.Name()
 
 	// Tests on
 	conf.Logging.Type = "json"

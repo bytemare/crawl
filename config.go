@@ -34,6 +34,7 @@ type config struct {
 		Type        string `yaml:"type" envconfig:"CRAWLER_LOG_TYPE"`
 		Permissions uint   `yaml:"perms" envconfig:"CRAWLER_LOG_FILE_PERMS"`
 		Do          bool   `yaml:"do" envconfig:"CRAWLER_LOG"`
+		fileDes     *os.File
 	} `yaml:"logging"`
 }
 
@@ -68,7 +69,8 @@ func configGetEmergencyConf() *config {
 			Type        string `yaml:"type" envconfig:"CRAWLER_LOG_TYPE"`
 			Permissions uint   `yaml:"perms" envconfig:"CRAWLER_LOG_FILE_PERMS"`
 			Do          bool   `yaml:"do" envconfig:"CRAWLER_LOG"`
-		}{2, "stdout", "", "text", 0, false},
+			fileDes     *os.File
+		}{2, "stdout", "", "text", 0, false, nil},
 	}
 }
 
@@ -153,7 +155,11 @@ func configInitLogging(conf *config) (err error) {
 
 		// Set logging output
 		if conf.Logging.Output == "file" {
-			err = log2File(conf.Logging.File, os.FileMode(conf.Logging.Permissions))
+			var file *os.File
+			file, err = log2File(conf.Logging.File, os.FileMode(conf.Logging.Permissions))
+			if file != nil {
+				conf.Logging.fileDes = file
+			}
 		}
 
 		// Set logging format
@@ -169,14 +175,14 @@ func configInitLogging(conf *config) (err error) {
 }
 
 // log2File switches logging to be output to file only
-func log2File(logFile string, perms os.FileMode) (err error) {
-	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, perms)
+func log2File(logFile string, perms os.FileMode) (file *os.File, err error) {
+	file, err = os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, perms)
 	if err == nil {
 		log.SetOutput(file)
 	} else {
 		err = errors.Wrapf(err, "Failed to set logging to file '%s', using default stderr.", logFile)
 	}
-	return err
+	return file, err
 }
 
 // configPatchEnv populates missing environment variables with values found in the configuration file
