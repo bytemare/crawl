@@ -46,24 +46,13 @@ jobs:
         - bash <(curl -s https://codecov.io/bash)
         - $GOPATH/bin/goveralls -service=travis-ci
 
-    - go: 1.12.x
-      name: "1.12 / linux"
-      os: linux
-      dist: trusty
-      script: go test -v -race
-    - go : 1.12.x
-      name: "1.12 / osx"
-      os: osx
-      script: go test -v -race
-    - go : 1.13.x
-      name: "1.13 / osx"
-      os: osx
-      script: go test -v -race
-    - go: 1.12.x
-      name: "1.12 / windows"
-      os: windows
-      script: go test -v -race
-    - go: 1.13.x
-      name: "1.13 / windows"
-      os: windows
-      script: go test -v -race
+    - go:
+        - 1.11.x
+        - 1.12.x
+        - 1.13.x
+      os:
+        - linux
+        - osx
+        - windows
+      script:
+        - go test -v -race
