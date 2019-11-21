@@ -11,7 +11,5 @@ logging:
   level: 3
   output: "file" # or "stdout"
   file: "./log-crawler.log"
-  perms: 0666
+  perms: 0600
   type: "text" # or json
-
-

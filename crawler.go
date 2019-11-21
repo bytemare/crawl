@@ -14,7 +14,7 @@ type crawler struct {
 	task
 	workers
 	parameters
-	output chan<- *Result
+	output chan<- *LinkMap
 }
 
 type parameters struct {
@@ -32,7 +32,7 @@ type linkStates struct {
 type task struct {
 	linkStates
 	todo    chan string
-	results chan *Result
+	results chan *LinkMap
 }
 
 type workers struct {
@@ -40,15 +40,15 @@ type workers struct {
 	workerStop chan struct{}
 }
 
-// Result holds the links of the web page pointed to by url, of the same host as the url
-type Result struct {
+// LinkMap holds the links of the web page pointed to by url, of the same host as the url
+type LinkMap struct {
 	URL   string
 	Links *[]string
-	err   error
+	Error error
 }
 
 // newCrawler returns an initialised crawler struct
-func newCrawler(domain string, output chan<- *Result, timeout time.Duration, maxRetry int) (*crawler, error) {
+func newCrawler(domain string, output chan<- *LinkMap, timeout time.Duration, maxRetry int) (*crawler, error) {
 	dURL, err := url.Parse(domain)
 	if err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func newCrawler(domain string, output chan<- *Result, timeout time.Duration, max
 				failed:  make(map[string]bool),
 			},
 			todo:    make(chan string, 100),
-			results: make(chan *Result, 100),
+			results: make(chan *LinkMap, 100),
 		},
 		workers: workers{
 			workerSync: sync.WaitGroup{},
@@ -77,12 +77,12 @@ func newCrawler(domain string, output chan<- *Result, timeout time.Duration, max
 	}, nil
 }
 
-//  newResult returns an initialised Result struct
-func newResult(url string, links *[]string) *Result {
-	return &Result{
+//  newLinkMap returns an initialised LinkMap struct
+func newLinkMap(url string, links *[]string) *LinkMap {
+	return &LinkMap{
 		URL:   url,
 		Links: links,
-		err:   nil,
+		Error: nil,
 	}
 }
 
@@ -97,7 +97,7 @@ func scrapLinks(url string, timeout time.Duration) ([]string, error) {
 		}
 	}()
 	if err != nil {
-		log.WithField("url", url).Tracef("Download failed.")
+		log.WithField("url", url).Tracef("Download failed : %s", err)
 		return nil, err
 	}
 
@@ -123,17 +123,17 @@ func download(url string, timeout time.Duration) (io.ReadCloser, error) {
 
 // scraper serves a worker goroutine.
 // It retrieves a web page, parses it for links,
-// keeps only domain or relative links, sanitises them, an returns the Result
+// keeps only domain or relative links, sanitises them, an returns the LinkMap
 func (c *crawler) scraper(url string) {
 	defer c.workerSync.Done()
 
-	// Result will hold the links on success, or send as is on error
-	res := newResult(url, nil)
+	// LinkMap will hold the links on success, or send as is on error
+	res := newLinkMap(url, nil)
 
 	// Scrap and retrieve links
 	links, err := scrapLinks(url, c.requestTimeout)
 	if err != nil {
-		res.err = err
+		res.Error = err
 	} else {
 		// Filter links by current domain
 		links = c.filterHost(links)
@@ -189,9 +189,9 @@ func (c *crawler) filterLinks(links []string) []string {
 	return links[:n]
 }
 
-// handleResultError handles the error a Result has upon return of a link scraping attempt
-func (c *crawler) handleResultError(res *Result) {
-	log.WithField("url", res.URL).Tracef("Result returned with error : %s", res.err)
+// handleResultError handles the error a LinkMap has upon return of a link scraping attempt
+func (c *crawler) handleResultError(res *LinkMap) {
+	log.WithField("url", res.URL).Tracef("LinkMap returned with error : %s", res.Error)
 
 	// If we tried to much, mark it as failed
 	if c.pending[res.URL] >= c.maxRetry {
@@ -205,9 +205,9 @@ func (c *crawler) handleResultError(res *Result) {
 	c.todo <- res.URL
 }
 
-// handleResult treats the Result of scraping a page for links
-func (c *crawler) handleResult(result *Result) {
-	if result.err != nil {
+// handleResult treats the LinkMap of scraping a page for links
+func (c *crawler) handleResult(result *LinkMap) {
+	if result.Error != nil {
 		c.handleResultError(result)
 		return
 	}
@@ -226,7 +226,7 @@ func (c *crawler) handleResult(result *Result) {
 		c.todo <- link
 	}
 
-	// Log Result and send them to caller
+	// Log LinkMap and send them to caller
 	log.WithFields(logrus.Fields{
 		"url":   result.URL,
 		"links": filtered,
@@ -254,7 +254,7 @@ func initialiseCrawler(domain string, syn *synchron, conf *config) *crawler {
 	c, err := newCrawler(domain, syn.results, conf.Requests.Timeout, int(conf.Requests.Retries))
 	if err != nil {
 		log.WithField("url", domain).Error(err)
-		syn.sendQuitSignal()
+		syn.notifyStop(exitErrorInit)
 		return nil
 	}
 	c.todo <- c.domain.String()
@@ -267,7 +267,7 @@ func (c *crawler) quitCrawler(syn *synchron) {
 	log.WithField("url", c.domain.String()).Info("Stopping crawler.")
 	c.workerSync.Wait()
 	log.WithField("url", c.domain.String()).Infof("Visited %d links. %d failed.", len(c.visited), len(c.failed))
-	syn.sendQuitSignal()
+	syn.notifyStop(exitLinks)
 }
 
 // crawl manages worker goroutines scraping pages and prints results

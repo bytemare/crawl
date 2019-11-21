@@ -1,13 +1,13 @@
 package crawl
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/kelseyhightower/envconfig"
@@ -34,6 +34,7 @@ type config struct {
 		Type        string `yaml:"type" envconfig:"CRAWLER_LOG_TYPE"`
 		Permissions uint   `yaml:"perms" envconfig:"CRAWLER_LOG_FILE_PERMS"`
 		Do          bool   `yaml:"do" envconfig:"CRAWLER_LOG"`
+		fileDes     *os.File
 	} `yaml:"logging"`
 }
 
@@ -68,7 +69,8 @@ func configGetEmergencyConf() *config {
 			Type        string `yaml:"type" envconfig:"CRAWLER_LOG_TYPE"`
 			Permissions uint   `yaml:"perms" envconfig:"CRAWLER_LOG_FILE_PERMS"`
 			Do          bool   `yaml:"do" envconfig:"CRAWLER_LOG"`
-		}{2, "stdout", "", "text", 0, false},
+			fileDes     *os.File
+		}{2, "stdout", "", "text", 0, false, nil},
 	}
 }
 
@@ -98,7 +100,7 @@ func initialiseCrawlConfiguration() (*config, error) {
 	var fileConf config
 	isPresent, err := configLoadFile(&fileConf, configFile())
 	if isPresent && err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, exitErrorConf)
 	}
 
 	// If a configuration file is not present load the default emergency configuration (i.e. no logging, no timeout)
@@ -113,20 +115,18 @@ func initialiseCrawlConfiguration() (*config, error) {
 	// Patch missing env vars
 	err = configPatchEnv(missing, &fileConf)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, exitErrorConf)
 	}
 
 	// Reload env vars to config
 	envConf, err := configLoadEnv()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, exitErrorConf)
 	}
 
 	// Initialise logging
 	if err := configInitLogging(envConf); err != nil {
-		// fixme : when emergency config is used, it's error message is going to be ignored.
-		//  => Use 1.13 error handling.
-		return envConf, err
+		return envConf, errors.Wrapf(err, "%s", emergency)
 	}
 
 	return envConf, emergency
@@ -155,7 +155,11 @@ func configInitLogging(conf *config) (err error) {
 
 		// Set logging output
 		if conf.Logging.Output == "file" {
-			err = log2File(conf.Logging.File, os.FileMode(conf.Logging.Permissions))
+			var file *os.File
+			file, err = log2File(conf.Logging.File, os.FileMode(conf.Logging.Permissions))
+			if file != nil {
+				conf.Logging.fileDes = file
+			}
 		}
 
 		// Set logging format
@@ -171,15 +175,14 @@ func configInitLogging(conf *config) (err error) {
 }
 
 // log2File switches logging to be output to file only
-func log2File(logFile string, perms os.FileMode) (err error) {
-	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, perms)
+func log2File(logFile string, perms os.FileMode) (file *os.File, err error) {
+	file, err = os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, perms)
 	if err == nil {
 		log.SetOutput(file)
 	} else {
-		msg := fmt.Sprintf("Failed to set logging to file '%s', using default stderr. Error : %s", logFile, err)
-		err = errors.New(msg)
+		err = errors.Wrapf(err, "Failed to set logging to file '%s', using default stderr.", logFile)
 	}
-	return err
+	return file, err
 }
 
 // configPatchEnv populates missing environment variables with values found in the configuration file
@@ -196,8 +199,7 @@ func configPatchEnv(missing []string, fileConf *config) error {
 		// Update the environment variable with value
 		value := fmt.Sprintf("%v", val)
 		if err := os.Setenv(envName, value); err != nil {
-			msg := fmt.Sprintf("Error in setting env var '%s:%s' : %s.", envName, value, err)
-			return errors.New(msg)
+			return errors.Wrapf(err, "Error in setting env var '%s:%s'", envName, value)
 		}
 	}
 
@@ -233,12 +235,14 @@ func configLoadFile(config *config, filePath string) (bool, error) {
 		msg := fmt.Sprintf("Unable to open config file : %s", err)
 		return false, errors.New(msg)
 	}
+	defer func() {
+		_ = file.Close()
+	}()
 
 	decoder := yaml.NewDecoder(file)
 	err = decoder.Decode(config)
 	if err != nil {
-		msg := fmt.Sprintf("Unable to parse config file : %s", err)
-		return true, errors.New(msg)
+		return true, errors.Wrapf(err, "Unable to parse config file '%s'", filePath)
 	}
 
 	return true, nil
@@ -249,8 +253,7 @@ func configLoadEnv() (*config, error) {
 	var config config
 	err := envconfig.Process("", &config)
 	if err != nil {
-		msg := fmt.Sprintf("Unable to gather Env vars for configuration : %s", err)
-		return nil, errors.New(msg)
+		return nil, errors.Wrap(err, "Unable to gather Env vars for configuration")
 	}
 	return &config, nil
 }

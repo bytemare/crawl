@@ -1,11 +1,10 @@
 package crawl
 
 import (
-	"errors"
-	"fmt"
 	"io"
 	"net/url"
 
+	"github.com/pkg/errors"
 	"golang.org/x/net/html"
 
 	"github.com/sirupsen/logrus"
@@ -59,8 +58,7 @@ func extractLink(origin string, token html.Token) string {
 func sanitise(origin string, link string) (string, error) {
 	u, err := url.Parse(link)
 	if err != nil {
-		msg := fmt.Sprintf("Error in parsing url : %s", err)
-		return "", errors.New(msg)
+		return "", errors.Wrap(err, "Error in parsing url")
 	}
 
 	if u.Path == "" || u.Path == "/" {
@@ -69,8 +67,7 @@ func sanitise(origin string, link string) (string, error) {
 
 	base, err := url.Parse(origin)
 	if err != nil {
-		msg := fmt.Sprintf("Error in parsing url : %s", err)
-		return "", errors.New(msg)
+		return "", errors.Wrap(err, "Error in parsing url")
 	}
 	u = base.ResolveReference(u)
 

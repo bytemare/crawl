@@ -1,22 +1,12 @@
 language: go
 
-go:
-  - 1.12
-  - 1.13
-  - tip
-
 env:
   - GO111MODULE=on
 
-#branches:
-#  only:
-#  - dev
-
-addons:
-  sonarcloud:
-    organization: "bytemare-github"
-    token:
-      secure: ${SONAR_TOKEN}
+branches:
+  only:
+    - dev
+    - master
 
 git:
   depth: false # Sonar doesn't like shallow clones
@@ -24,26 +14,56 @@ git:
 notifications:
   email: false
 
-matrix:
+jobs:
   include:
-    - os: linux
+
+    - stage : "Static Analysis"
+      go: 1.13.x
+      os: linux
       dist: trusty
-    - os: osx
-    - os: windows
-  allow_failures:
-    - os: windows
-  fast_finish: true
+      install:
+        - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+      script:
+        - golangci-lint run ./...
 
-before_install:
-  - go get github.com/mattn/goveralls
-  - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+    - stage: "Tests"
+      name: "Unit Tests and coverage"
+      go: 1.13.x
+      addons:
+        sonarcloud:
+          organization: "bytemare-github"
+          token:
+            secure: ${SONAR_TOKEN}
+      os: linux
+      dist: trusty
+      install:
+        - go get github.com/mattn/goveralls
+      script:
+        #- go test -v -trace trace.out
+        - go test -v -race -coverprofile=coverage.out -covermode=atomic
+      after_success:
+        - sonar-scanner
+        - bash <(curl -s https://codecov.io/bash)
+        - $GOPATH/bin/goveralls -service=travis-ci
 
-script:
-  - go test -v -trace trace.out
-  - go test -v -race -coverprofile=coverage.out -covermode=atomic
-  - golangci-lint run ./...
-  - $GOPATH/bin/goveralls -service=travis-ci
-
-after_success:
-  - sonar-scanner
-  - bash <(curl -s https://codecov.io/bash)
+    - go: 1.12.x
+      name: "1.12 / linux"
+      os: linux
+      dist: trusty
+      script: go test -v -race
+    - go : 1.12.x
+      name: "1.12 / osx"
+      os: osx
+      script: go test -v -race
+    - go : 1.13.x
+      name: "1.13 / osx"
+      os: osx
+      script: go test -v -race
+    - go: 1.12.x
+      name: "1.12 / windows"
+      os: windows
+      script: go test -v -race
+    - go: 1.13.x
+      name: "1.13 / windows"
+      os: windows
+      script: go test -v -race
