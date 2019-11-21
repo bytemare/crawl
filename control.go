@@ -170,7 +170,7 @@ func FetchLinks(domain string, timeout time.Duration) (*CrawlerResults, error) {
 	}
 
 	res.links = make([]string, 0, 100) // todo : trade-off here, look if we really need that
-	for linkMap := range res.stream {
+	for linkMap := range res.Stream() {
 		res.links = append(res.links, *linkMap.Links...)
 	}
 
