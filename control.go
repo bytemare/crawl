@@ -113,8 +113,7 @@ func validateInput(domain string, timeout time.Duration) error {
 
 	// Check whether domain is of valid form
 	if _, err := url.ParseRequestURI(domain); err != nil {
-		msg := fmt.Sprintf("Invalid url : you must specify a valid target domain/url to crawl : %s", err)
-		return errors.New(msg)
+		return errors.Wrap(err, "Invalid url : you must specify a valid target domain/url to crawl")
 	}
 
 	// Invalid timeout values are handled later, but let's not the user mess with us

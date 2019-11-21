@@ -84,7 +84,7 @@ func TestScraperFail(t *testing.T) {
 	go c.scraper(test.urlBad)
 	c.workerSync.Wait()
 	result := <-c.results
-	if result.Err == nil {
+	if result.Error == nil {
 		t.Errorf("scraper() should flag an error in the returning result. URL : '%s'.", test.urlBad)
 	}
 }
@@ -120,7 +120,7 @@ func TestHandleResult(t *testing.T) {
 
 	c := initialiseCrawler(test.urlValid, test.syn, conf)
 	badResult := newLinkMap(test.urlBad, nil)
-	badResult.Err = errors.New("this a test error")
+	badResult.Error = errors.New("this a test error")
 	c.handleResult(badResult)
 	_, visited := c.visited[badResult.URL]
 	if visited {
@@ -136,7 +136,7 @@ func TestHandleResultError(t *testing.T) {
 	c := initialiseCrawler(test.urlValid, test.syn, conf)
 
 	badResult := newLinkMap(test.urlBad, nil)
-	badResult.Err = errors.New("this a test error")
+	badResult.Error = errors.New("this a test error")
 
 	// Test case we re-enqueue the result
 	c.pending[badResult.URL] = c.maxRetry - 1

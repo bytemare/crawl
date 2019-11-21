@@ -44,7 +44,7 @@ type workers struct {
 type LinkMap struct {
 	URL   string
 	Links *[]string
-	Err   error
+	Error error
 }
 
 // newCrawler returns an initialised crawler struct
@@ -82,7 +82,7 @@ func newLinkMap(url string, links *[]string) *LinkMap {
 	return &LinkMap{
 		URL:   url,
 		Links: links,
-		Err:   nil,
+		Error: nil,
 	}
 }
 
@@ -97,7 +97,7 @@ func scrapLinks(url string, timeout time.Duration) ([]string, error) {
 		}
 	}()
 	if err != nil {
-		log.WithField("url", url).Tracef("Download failed.")
+		log.WithField("url", url).Tracef("Download failed : %s", err)
 		return nil, err
 	}
 
@@ -133,7 +133,7 @@ func (c *crawler) scraper(url string) {
 	// Scrap and retrieve links
 	links, err := scrapLinks(url, c.requestTimeout)
 	if err != nil {
-		res.Err = err
+		res.Error = err
 	} else {
 		// Filter links by current domain
 		links = c.filterHost(links)
@@ -191,7 +191,7 @@ func (c *crawler) filterLinks(links []string) []string {
 
 // handleResultError handles the error a LinkMap has upon return of a link scraping attempt
 func (c *crawler) handleResultError(res *LinkMap) {
-	log.WithField("url", res.URL).Tracef("LinkMap returned with error : %s", res.Err)
+	log.WithField("url", res.URL).Tracef("LinkMap returned with error : %s", res.Error)
 
 	// If we tried to much, mark it as failed
 	if c.pending[res.URL] >= c.maxRetry {
@@ -207,7 +207,7 @@ func (c *crawler) handleResultError(res *LinkMap) {
 
 // handleResult treats the LinkMap of scraping a page for links
 func (c *crawler) handleResult(result *LinkMap) {
-	if result.Err != nil {
+	if result.Error != nil {
 		c.handleResultError(result)
 		return
 	}
