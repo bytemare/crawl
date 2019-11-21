@@ -59,3 +59,11 @@ jobs:
       name: "1.13 / osx"
       os: osx
       script: go test -v -race
+    - go: 1.12.x
+      name: "1.12 / windows"
+      os: windows
+      script: go test -v -race
+    - go: 1.13.x
+      name: "1.13 / windows"
+      os: windows
+      script: go test -v -race
