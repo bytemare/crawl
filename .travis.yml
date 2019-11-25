@@ -17,8 +17,9 @@ notifications:
 jobs:
   include:
 
-    - stage : "Static Analysis"
+    - stage : "Static Analysis, Unit Tests and Coverage"
       go: 1.13.x
+      name : "GolangCI Linting"
       os: linux
       dist: trusty
       install:
@@ -26,9 +27,8 @@ jobs:
       script:
         - golangci-lint run ./...
 
-    - stage: "Tests"
-      name: "Unit Tests and coverage"
-      go: 1.13.x
+    - go: 1.13.x
+      name: "Unit Tests and Coverage"
       addons:
         sonarcloud:
           organization: "bytemare-github"
@@ -39,20 +39,20 @@ jobs:
       install:
         - go get github.com/mattn/goveralls
       script:
-        #- go test -v -trace trace.out
+        - go test -v -trace trace.out
         - go test -v -race -coverprofile=coverage.out -covermode=atomic
       after_success:
         - sonar-scanner
         - bash <(curl -s https://codecov.io/bash)
         - $GOPATH/bin/goveralls -service=travis-ci
 
-    - go:
-        - 1.11.x
-        - 1.12.x
-        - 1.13.x
-      os:
-        - linux
-        - osx
-        - windows
-      script:
-        - go test -v -race
+go:
+  - 1.11.x
+  - 1.12.x
+  - 1.13.x
+os:
+  - linux
+  - osx
+  - windows
+script:
+  - go test -v -race
