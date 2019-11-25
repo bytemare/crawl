@@ -165,13 +165,13 @@ func TestCancellableScrapLinksSuccess(t *testing.T) {
 
 	// Should return nothing when stop is requested
 	stop = make(chan struct{})
-	cancelWait := 200 * time.Millisecond
+	cancelWait := 50 * time.Millisecond
 	go func() {
 		time.Sleep(cancelWait)
 		close(stop)
 	}()
 
-	res, err = cancellableScrapLinks(test.urlValid, test.timeout, stop)
+	res, err = cancellableScrapLinks(test.urlTimeout, test.timeout, stop)
 	if err != nil || res != nil {
 		t.Errorf("cancellableScrapLinks() should return nil only when stop is requested : %s", err)
 	}
