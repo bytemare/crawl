@@ -14,19 +14,23 @@ git:
 notifications:
   email: false
 
+stages:
+  - "Static Analysis, Unit Tests and Coverage"
+  - test
+  #- name: deploy
+  #    if: branch = master
+
 jobs:
   include:
-
-    - stage : "Static Analysis, Unit Tests and Coverage"
+    - stage: "Static Analysis, Unit Tests and Coverage"
       go: 1.13.x
-      name : "GolangCI Linting"
+      name: "GolangCI Linting"
       os: linux
       dist: trusty
       install:
         - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
       script:
-        - golangci-lint run ./...
-
+        - golangci-lint run ./..
     - go: 1.13.x
       name: "Unit Tests and Coverage"
       addons:
