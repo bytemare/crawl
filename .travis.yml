@@ -26,7 +26,6 @@ jobs:
       go: 1.13.x
       name: "GolangCI Linting"
       os: linux
-      dist: trusty
       install:
         - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
       script:
@@ -39,7 +38,6 @@ jobs:
           token:
             secure: ${SONAR_TOKEN}
       os: linux
-      dist: trusty
       install:
         - go get github.com/mattn/goveralls
       script:
