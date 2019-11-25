@@ -2,28 +2,31 @@ package crawl
 
 import (
 	"errors"
-	"io"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type testData struct {
-	timeout    time.Duration
-	syn        *synchron
-	urlBad     string
-	urlValid   string
-	urlTimeout string
+	timeout       time.Duration
+	syn           *synchron
+	urlBad        string
+	urlValid      string
+	urlTimeout    string
+	expectedLinks []string
 }
 
 // getTestData returns default test data
 func getTestData() *testData {
 	timeout := 3 * time.Second
 	return &testData{
-		timeout:    timeout,
-		syn:        newSynchron(timeout, 1),
-		urlBad:     "https://example.com/%",
-		urlValid:   "https://example.com",
-		urlTimeout: "http://example.com:8000/submit",
+		timeout:       timeout,
+		syn:           newSynchron(timeout, 1),
+		urlBad:        "https://example.com/%",
+		urlValid:      "https://example.com",
+		urlTimeout:    "http://example.com:8000/submit",
+		expectedLinks: []string{"https://www.iana.org/domains/example"},
 	}
 }
 
@@ -89,30 +92,6 @@ func TestScraperFail(t *testing.T) {
 	}
 }
 
-// TestDownloadFail tests a failing condition for the download function
-func TestDownloadFail(t *testing.T) {
-	var closeBody = func(body io.ReadCloser) {
-		if body != nil {
-			_ = body.Close()
-		}
-	}
-	test := getTestData()
-
-	// Should fail on request building
-	body, err := download(test.urlBad, test.timeout)
-	if err == nil {
-		t.Errorf("download() should fail on invalid link. URL : '%s'", test.urlBad)
-	}
-	closeBody(body)
-
-	// Should fail on request execution due to timeout
-	body, err = download(test.urlTimeout, test.timeout)
-	if err == nil {
-		t.Errorf("download() should timeout on non-ending request. URL : '%s'", test.urlTimeout)
-	}
-	closeBody(body)
-}
-
 // TestHandleResult tests the right behaviour of handleResult() in case of an error in a result
 func TestHandleResult(t *testing.T) {
 	test := getTestData()
@@ -152,5 +131,56 @@ func TestHandleResultError(t *testing.T) {
 	_, pending := c.pending[badResult.URL]
 	if pending || !failed {
 		t.Error("HandleResultError doesn't correctly switch the URL from pending to failed.")
+	}
+}
+
+// TestCancellableScrapLinksFail tests failing conditions for the download function
+func TestCancellableScrapLinksFail(t *testing.T) {
+	test := getTestData()
+
+	// Should fail on request building
+	_, err := cancellableScrapLinks(test.urlBad, test.timeout, nil)
+	if err == nil {
+		t.Errorf("cancellableScrapLinks() should fail on invalid link. URL : '%s'", test.urlBad)
+	}
+
+	// Should fail on request execution due to timeout
+	_, err = cancellableScrapLinks(test.urlTimeout, test.timeout, nil)
+	if err == nil {
+		t.Errorf("cancellableScrapLinks() should fail on timeout. Timeout : '%s'", test.timeout)
+	}
+}
+
+// TestCancellableScrapLinksSuccess verifies the function behaves appropriately on success cases
+func TestCancellableScrapLinksSuccess(t *testing.T) {
+	test := getTestData()
+
+	// Should return immediately because stop is requested
+	stop := make(chan struct{})
+	close(stop)
+	res, err := cancellableScrapLinks(test.urlValid, test.timeout, stop)
+	if err != nil || res != nil {
+		t.Error("cancellableScrapLinks() should return nil only when stop is requested.")
+	}
+
+	// Should return nothing when stop is requested
+	stop = make(chan struct{})
+	cancelWait := 200 * time.Millisecond
+	go func() {
+		time.Sleep(cancelWait)
+		close(stop)
+	}()
+
+	res, err = cancellableScrapLinks(test.urlValid, test.timeout, stop)
+	if err != nil || res != nil {
+		t.Errorf("cancellableScrapLinks() should return nil only when stop is requested : %s", err)
+	}
+
+	// Should return expected result
+	res, err = cancellableScrapLinks(test.urlValid, test.timeout, nil)
+	if err != nil {
+		t.Errorf("cancellableScrapLinks() should not return an error and return expected result : %s", err)
+	} else {
+		assert.ElementsMatch(t, test.expectedLinks, res)
 	}
 }

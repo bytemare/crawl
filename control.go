@@ -185,5 +185,5 @@ func ScrapLinks(url string, timeout time.Duration) ([]string, error) {
 	if err != nil && conf == nil {
 		return nil, errors.Wrap(err, exitErrorConf)
 	}
-	return scrapLinks(url, timeout)
+	return cancellableScrapLinks(url, timeout, nil)
 }

@@ -91,6 +91,21 @@ func TestFetchLinks(t *testing.T) {
 	}
 }
 
+// TestScrapLinksSuccess tests if the functions succeeds with expected results
+func TestScrapLinksSuccess(t *testing.T) {
+	url := "https://bytema.re"
+	timeout := time.Duration(0)
+	expected := []string{"https://bytema.re/author/bytemare/", "https://bytema.re/crypto/", "https://bytema.re/tutos/",
+		"https://bytema.re/x/", "https://bytema.re/compiling/", "https://twitter.com/_bytemare"}
+
+	links, err := ScrapLinks(url, timeout)
+	if err != nil || len(links) == 0 {
+		t.Errorf("FetchLinks should return results for '%s' : %s", url, err)
+	} else {
+		assert.ElementsMatch(t, expected, links)
+	}
+}
+
 // TestScrapLinksFail tests failing conditions for ScrapLinks()
 func TestScrapLinksFail(t *testing.T) {
 	urlBad := "https://example.com/%"
@@ -123,7 +138,7 @@ restore:
 
 // TestFetchLinksInterrupt simulates a crawling with signal interrupt
 func TestFetchLinksInterrupt(t *testing.T) {
-	// don't run this test on windows, since signals are not supported
+	// Don't run this test on windows, since signals are not supported
 	if runtime.GOOS == "windows" {
 		return
 	}

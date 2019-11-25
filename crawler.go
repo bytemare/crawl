@@ -1,8 +1,6 @@
 package crawl
 
 import (
-	"io"
-	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -86,41 +84,6 @@ func newLinkMap(url string, links *[]string) *LinkMap {
 	}
 }
 
-// scrapLinks returns the links found in the web page pointed to by url
-func scrapLinks(url string, timeout time.Duration) ([]string, error) {
-	// Retrieve page
-	log.WithField("url", url).Tracef("Attempting download.")
-	body, err := download(url, timeout)
-	defer func() {
-		if body != nil {
-			_ = body.Close()
-		}
-	}()
-	if err != nil {
-		log.WithField("url", url).Tracef("Download failed : %s", err)
-		return nil, err
-	}
-
-	// Retrieve links
-	return extractLinks(url, body), nil
-}
-
-// download retrieves the web page pointed to by the given url
-func download(url string, timeout time.Duration) (io.ReadCloser, error) {
-	var client = &http.Client{
-		Timeout: timeout,
-	}
-
-	resp, err := client.Get(url)
-	if err != nil {
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
-		return nil, err
-	}
-	return resp.Body, nil
-}
-
 // scraper serves a worker goroutine.
 // It retrieves a web page, parses it for links,
 // keeps only domain or relative links, sanitises them, an returns the LinkMap
@@ -131,10 +94,12 @@ func (c *crawler) scraper(url string) {
 	res := newLinkMap(url, nil)
 
 	// Scrap and retrieve links
-	links, err := scrapLinks(url, c.requestTimeout)
+	log.WithField("url", url).Tracef("Attempting download.")
+	links, err := cancellableScrapLinks(url, c.requestTimeout, c.workerStop)
 	if err != nil {
+		log.WithField("url", url).Tracef("Download failed : %s", err)
 		res.Error = err
-	} else {
+	} else if links != nil {
 		// Filter links by current domain
 		links = c.filterHost(links)
 		res.Links = &links
@@ -263,11 +228,14 @@ func initialiseCrawler(domain string, syn *synchron, conf *config) *crawler {
 
 // quitCrawler initiates the shutdown process of the crawler
 func (c *crawler) quitCrawler(syn *synchron) {
-	close(c.workerStop)
-	log.WithField("url", c.domain.String()).Info("Stopping crawler.")
-	c.workerSync.Wait()
-	log.WithField("url", c.domain.String()).Infof("Visited %d links. %d failed.", len(c.visited), len(c.failed))
+	// Declare intend to stop
 	syn.notifyStop(exitLinks)
+
+	// Inform launched workers to stop, and wait for them
+	close(c.workerStop)
+	c.workerSync.Wait()
+
+	log.WithField("url", c.domain.String()).Infof("Visited %d links. %d failed.", len(c.visited), len(c.failed))
 }
 
 // crawl manages worker goroutines scraping pages and prints results
@@ -297,7 +265,6 @@ loop:
 		// Every tick, verify if there are jobs or pending tasks left
 		case <-ticker.C:
 			if !c.checkProgress() {
-				log.WithField("url", domain).Info("No links left to explore.")
 				break loop
 			}
 		}
