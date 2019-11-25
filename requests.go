@@ -15,8 +15,15 @@ func cancellableRequest(ctx context.Context, client *http.Client, req *http.Requ
 	// Send request
 	resp, err := client.Do(req)
 
+	var bodyClose = func() {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+	}
+
 	select {
 	case <-ctx.Done(): // Cancelled
+		bodyClose()
 		return
 	default: // Success or timeout
 		break
