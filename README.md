@@ -104,7 +104,7 @@ func myScraper() {
 
 ## Supported go versions
 
-We support the last two major Go versions, which are 1.12 and 1.13 at the moment.
+We support the last three major Go versions, which are 1.11, 1.12 and 1.13 at the moment.
 
 ## Contributing
 
