@@ -9,6 +9,11 @@ You can launch the app with or without a timeout (in seconds), like this :
 go run app/crawl.go (-timeout=10) https://bytema.re
 ```
 
+With docker :
+```docker
+docker run --rm --read-only --security-opt="no-new-privileges" bytemare/crawl https://bytema.re
+```
+
 However the program was launched, you can interrupt it with ctrl+c.
 
 ## Features
