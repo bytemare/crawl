@@ -1,186 +1,183 @@
 package crawl
 
 import (
-	"errors"
+	"os"
+	"runtime"
 	"testing"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
 )
 
-type testData struct {
-	timeout       time.Duration
-	syn           *synchron
-	urlBad        string
-	urlValid      string
-	urlTimeout    string
-	expectedLinks []string
+type crawlerTest struct {
+	url         string
+	timeout     time.Duration
+	exitContext string
+	errMsg      string
 }
 
-// getTestData returns default test data
-func getTestData() *testData {
+// TestFetchLinksFail tests cases where FetchLinks is supposed to fail and/or return an error
+func TestFetchLinksFail(t *testing.T) {
+	var err error
+	var crawlerResults *CrawlerResults
+	failing := []crawlerTest{
+		{"", 0 * time.Second, "", "FetchLinks returned without error, but url is empty."},
+		{"bytema.re", 0 * time.Second, "", "FetchLinks returned without error, but url is invalid."},
+		{"https://bytema.re", -10 * time.Second, "", "FetchLinks returned without error, but timeout is invalid."},
+	}
+
+	crawler, _ := NewCrawler()
+
+	for _, test := range failing {
+		crawlerResults, err = crawler.FetchLinks(test.url, test.timeout)
+		if err == nil || crawlerResults != nil {
+			t.Errorf("%s URL : %s, timeout %d.", test.errMsg, test.url, test.timeout)
+		}
+	}
+
+	// Set up failing condition for config initialisation
+	urlBad := "https://example.com/%"
 	timeout := 3 * time.Second
-	return &testData{
-		timeout:       timeout,
-		syn:           newSynchron(timeout, 1),
-		urlBad:        "https://example.com/%",
-		urlValid:      "https://example.com",
-		urlTimeout:    "http://example.com:8000/submit",
-		expectedLinks: []string{"https://www.iana.org/domains/example"},
+	test := getConfigTest()
+	env := getEnv()
+	os.Clearenv()
+
+	// Place an invalid phony config file
+	if !test.makeInvalidConfigFile(t) {
+		goto restore
 	}
-}
 
-// getTestConfig returns a default configuration with logging turned off
-func getTestConfig() *config {
-	return configGetEmergencyConf()
-}
-
-// TestNewCrawlerFail tests a failing condition for the newCrawler() function
-func TestNewCrawlerFail(t *testing.T) {
-	test := getTestData()
-	_, err := newCrawler(test.urlBad, test.syn.results, test.timeout, 3)
-	if err == nil {
-		t.Errorf("newCrawler() should fail with invalid domain. URL : '%s'.", test.urlBad)
+	crawlerResults, err = crawler.FetchLinks(urlBad, timeout)
+	if err == nil || crawlerResults != nil {
+		t.Error("FetchLinks() should fail when config fails.")
 	}
+
+	// Restore config file and env vars
+restore:
+	restoreConfigFileAndEnv(t, test, env)
 }
 
-// TestInitialiseCrawler tests a failing condition for the initialiseCrawler() function
-func TestInitialiseCrawlerFail(t *testing.T) {
-	test := getTestData()
-	conf := getTestConfig()
-
-	c := initialiseCrawler(test.urlBad, test.syn, conf)
-	if c != nil {
-		t.Errorf("initialiseCrawler() should fail with invalid domain. URL : '%s'.", test.urlBad)
+// TestFetchLinksInterrupt simulates a crawling with signal interrupt
+func TestFetchLinksInterrupt(t *testing.T) {
+	// Don't run this test on windows, since signals are not supported
+	if runtime.GOOS == "windows" {
+		return
 	}
-}
 
-// TestCrawlFail should immediately return when initialiseCrawler fails
-func TestCrawlFail(t *testing.T) {
-	test := getTestData()
-	conf := getTestConfig()
-
-	// use a timeout to measure if crawler is running
+	signalTime := 2 * time.Second
 	done := make(chan struct{})
 
-	go func() {
-		go crawl(test.urlBad, test.syn, conf)
-		test.syn.group.Wait()
+	var sendSignal = func(wait time.Duration) {
+		time.Sleep(wait)
+		pid := os.Getpid()
+		p, err := os.FindProcess(pid)
+		if err != nil {
+			t.Logf("Couldn't find process : %s\n", err)
+		}
+
+		if err := p.Signal(os.Interrupt); err != nil {
+			t.Logf("Couldn't send signal : %s\n", err)
+		}
 		done <- struct{}{}
-	}()
+	}
 
-	// Wait for the crawler to return
+	test := getTestData()
+
+	crawler, _ := NewCrawler()
+
+	go sendSignal(signalTime)
+	crawlerResult, err := crawler.FetchLinks(test.urlTimeout, test.timeout)
+	if err != nil || crawlerResult == nil {
+		t.Errorf("Error in testing with signal. URL : %s, timeout : %0.3fs. : %s",
+			test.urlTimeout, test.timeout.Seconds(), err)
+	} else if crawlerResult.ExitContext() != exitSignal {
+		t.Errorf("Error in testing with signal. Signal was not caught. URL : %s, timeout : %0.3fs.",
+			test.urlTimeout, test.timeout.Seconds())
+	}
 	<-done
-	if test.syn.exitContext != exitErrorInit {
-		t.Error("crawler() should not run when calling initialiseCrawler() failed.")
+}
+
+// TestFetchLinksSuccess tests cases where FetchLinks is supposed to succeed
+func TestFetchLinksSuccess(t *testing.T) {
+	var succeed = []crawlerTest{
+		{"https://bytema.re", 10 * time.Second, exitLinks, ""},
+		{"https://bytema.re", 100 * time.Millisecond, exitTimeout, ""},
+		{"https://bytema.re", 0 * time.Second, exitLinks, ""},
+	}
+	errMsg := "FetchLinks returned with error, but url and timeout are valid. URL : %s, timeout : %0.3fs."
+
+	crawler, _ := NewCrawler()
+
+	for _, test := range succeed {
+		crawlerResult, err := crawler.FetchLinks(test.url, test.timeout)
+		if err != nil || crawlerResult == nil {
+			t.Errorf("%s", errors.Wrapf(err, errMsg, test.url, test.timeout.Seconds()))
+		} else {
+			assert.Equal(t, test.exitContext, crawlerResult.ExitContext())
+		}
 	}
 }
 
-// TestScraperFail test a failing condition for the scraper method
-func TestScraperFail(t *testing.T) {
-	test := getTestData()
-	conf := getTestConfig()
+// TestFetchLinksExpected tests cases against expected output
+func TestFetchLinksExpected(t *testing.T) {
+	url := "https://bytema.re"
+	timeout := time.Duration(0)
+	expected := []string{"https://bytema.re/author/bytemare/", "https://bytema.re/crypto/", "https://bytema.re/tutos/",
+		"https://bytema.re/x/", "https://bytema.re/compiling/"}
 
-	c := initialiseCrawler(test.urlValid, test.syn, conf)
+	crawler, _ := NewCrawler()
 
-	c.workerSync.Add(1)
-	go c.scraper(test.urlBad)
-	c.workerSync.Wait()
-	result := <-c.results
-	if result.Error == nil {
-		t.Errorf("scraper() should flag an error in the returning result. URL : '%s'.", test.urlBad)
-	}
-}
-
-// TestHandleResult tests the right behaviour of handleResult() in case of an error in a result
-func TestHandleResult(t *testing.T) {
-	test := getTestData()
-	conf := getTestConfig()
-
-	c := initialiseCrawler(test.urlValid, test.syn, conf)
-	badResult := newLinkMap(test.urlBad, nil)
-	badResult.Error = errors.New("this a test error")
-	c.handleResult(badResult)
-	_, visited := c.visited[badResult.URL]
-	if visited {
-		t.Errorf("handleResult() should not mark a failing URL as visited.")
-	}
-}
-
-// TestHandleResultError tests handleResultError
-func TestHandleResultError(t *testing.T) {
-	test := getTestData()
-	conf := getTestConfig()
-
-	c := initialiseCrawler(test.urlValid, test.syn, conf)
-
-	badResult := newLinkMap(test.urlBad, nil)
-	badResult.Error = errors.New("this a test error")
-
-	// Test case we re-enqueue the result
-	c.pending[badResult.URL] = c.maxRetry - 1
-	c.handleResultError(badResult)
-	if c.failed[badResult.URL] {
-		t.Error("URL retries have not hit the maximum, should be marked as failed.")
-	}
-
-	// Test case we decide to mark a URL as failed
-	c.pending[badResult.URL] = c.maxRetry
-	c.handleResultError(badResult)
-	_, failed := c.failed[badResult.URL]
-	_, pending := c.pending[badResult.URL]
-	if pending || !failed {
-		t.Error("HandleResultError doesn't correctly switch the URL from pending to failed.")
-	}
-}
-
-// TestCancellableScrapLinksFail tests failing conditions for the download function
-func TestCancellableScrapLinksFail(t *testing.T) {
-	test := getTestData()
-
-	// Should fail on request building
-	_, err := cancellableScrapLinks(test.urlBad, test.timeout, nil)
-	if err == nil {
-		t.Errorf("cancellableScrapLinks() should fail on invalid link. URL : '%s'", test.urlBad)
-	}
-
-	// Should fail on request execution due to timeout
-	_, err = cancellableScrapLinks(test.urlTimeout, test.timeout, nil)
-	if err == nil {
-		t.Errorf("cancellableScrapLinks() should fail on timeout. Timeout : '%s'", test.timeout)
-	}
-}
-
-// TestCancellableScrapLinksSuccess verifies the function behaves appropriately on success cases
-func TestCancellableScrapLinksSuccess(t *testing.T) {
-	test := getTestData()
-
-	// Should return immediately because stop is requested
-	stop := make(chan struct{})
-	close(stop)
-	res, err := cancellableScrapLinks(test.urlValid, test.timeout, stop)
-	if err != nil || res != nil {
-		t.Error("cancellableScrapLinks() should return nil only when stop is requested.")
-	}
-
-	// Should return nothing when stop is requested
-	stop = make(chan struct{})
-	cancelWait := 50 * time.Millisecond
-	go func() {
-		time.Sleep(cancelWait)
-		close(stop)
-	}()
-
-	res, err = cancellableScrapLinks(test.urlTimeout, test.timeout, stop)
-	if err != nil || res != nil {
-		t.Errorf("cancellableScrapLinks() should return nil only when stop is requested : %s", err)
-	}
-
-	// Should return expected result
-	res, err = cancellableScrapLinks(test.urlValid, test.timeout, nil)
-	if err != nil {
-		t.Errorf("cancellableScrapLinks() should not return an error and return expected result : %s", err)
+	crawlerResult, err := crawler.FetchLinks(url, timeout)
+	if err != nil || crawlerResult == nil || len(crawlerResult.Links()) == 0 {
+		t.Errorf("FetchLinks should return results for '%s' : %s", url, err)
 	} else {
-		assert.ElementsMatch(t, test.expectedLinks, res)
+		assert.ElementsMatch(t, expected, crawlerResult.Links())
+	}
+}
+
+// TestScrapLinksFail tests failing conditions for ScrapLinks()
+func TestScrapLinksFail(t *testing.T) {
+	urlBad := "https://example.com/%"
+	timeout := 3 * time.Second
+
+	_, err := ScrapLinks(urlBad, timeout)
+	if err == nil {
+		t.Errorf("ScrapLinks() should fail on invalid URL. URL : '%s'.", urlBad)
+	}
+
+	// Set up failing condition for config initialisation
+	test := getConfigTest()
+	env := getEnv()
+	os.Clearenv()
+
+	// Place an invalid phony config file
+	if !test.makeInvalidConfigFile(t) {
+		goto restore
+	}
+
+	_, err = ScrapLinks(urlBad, timeout)
+	if err == nil {
+		t.Error("ScrapLinks() should fail when config fails.")
+	}
+
+	// Restore config file and env vars
+restore:
+	restoreConfigFileAndEnv(t, test, env)
+}
+
+// TestScrapLinksSuccess tests if the functions succeeds with expected results
+func TestScrapLinksSuccess(t *testing.T) {
+	url := "https://bytema.re"
+	timeout := time.Duration(0)
+	expected := []string{"https://bytema.re/author/bytemare/", "https://bytema.re/crypto/", "https://bytema.re/tutos/",
+		"https://bytema.re/x/", "https://bytema.re/compiling/", "https://twitter.com/_bytemare"}
+
+	links, err := ScrapLinks(url, timeout)
+	if err != nil || len(links) == 0 {
+		t.Errorf("FetchLinks should return results for '%s' : %s", url, err)
+	} else {
+		assert.ElementsMatch(t, expected, links)
 	}
 }

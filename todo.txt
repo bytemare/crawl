@@ -1,0 +1,104 @@
+- introduced more objects/structs to manage state
+- no more global variable
+- less verbose logging
+- New api, with more parameters
+
+
+- use cobra/viper for command line arguments ?
+- add a hook in logrus to to log line and file ?
+- insert build number and version at compile time, and log it
+- use a Makefile
+
+
+Adapt output in Docker to good practices and write to stdout and stderr for logs
+
+
+Re-use same tcp connection :
+- use same connections accross multiple requests to host
+- may increase crawling speed (measure it !)
+
+
+New API :
+
+2 ways of using the crawler as a package :
+- call functions directly for dead-simple usage
+- return a configurable object to the caller
+
+Object will hold :
+    - usual runtime input
+    - logging configuration, to avoid the global var
+    - action functions
+
+
+parameterise a crawler before launching through functions (cf colly) :
+    - crawler.StopSignal() : adds sigint interception for stopping
+    - crawler.OnLink(func(){}) : tell what to do every time a link is found
+    - crawler.OnResponse()
+    - onError()
+    - crawler.OnFinish(func(){}) : tell what to do when crawler has finished
+    - crawler.OnRequest(func(){}) : tell what to do just before emitting a request (e.g. print "visiting abc.com")
+    - crawler.Output() : set one or multiple output destinations (stdout, file, network)
+
+set user agent
+
+Output graph
+
+Measure speed and improve
+
+Improve memory footprint
+
+Multi-host through regex
+
+don't send back through a channel : if result has a lot of elements, channel might get full.
+Find another solution/buffer
+
+add http : for each downloaded page, keep a hash, and if we download it in cleartext,
+and the hash is the same, don't continue
+
+
+make signal interception optional through api, config or env vars (sigint may not be desired or already handled by caller)
+
+output
+
+===========================================================================================
+===========================================================================================
+===========================================================================================
+
+check sanitisation : https://github.com/kennygrant/sanitize
+
+handle robots.txt : https://github.com/temoto/robotstxt
+
+https://godoc.org/google.golang.org/appengine/urlfetch
+
+
+
+Use context !
+- to propagate through the api :
+    - handle sync between goroutines and processes
+    - handle termination gracefully
+    - return the reason a request is terminated
+    - values :
+        - start url
+        - options
+
+
+Add context as first parameter :
+- https://blog.golang.org/context
+
+remove log file in tests for windows
+
+check redirection (can be done in client with CheckRedirect: redirectPolicyFunc,)
+
+
+return a cancel channel in api : a channel that takes a struct{} and will shutdown gracefully
+
+Add security scanners to process :
+- https://github.com/securego/gosec
+
+- add seccomp in the go binary
+=> https://blog.heroku.com/applying-seccomp-filters-on-go-binaries
+	+ use strace and go2seccomp to tailor profile :
+	+ fully automated
+	+ add in exec, not in package
+	+ https://github.com/elastic/go-seccomp-bpf
+    + https://github.com/pjbgf/gosystract

@@ -1,5 +1,11 @@
 # crawl
-[![Build Status](https://travis-ci.com/bytemare/crawl.svg?branch=master)](https://travis-ci.com/bytemare/crawl) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=bytemare_crawl&metric=coverage)](https://sonarcloud.io/dashboard?id=bytemare_crawl) [![Go Report Card](https://goreportcard.com/badge/github.com/bytemare/crawl)](https://goreportcard.com/report/github.com/bytemare/crawl) [![codebeat badge](https://codebeat.co/badges/db89a587-9d35-49ef-96b1-d62b9cd1775b)](https://codebeat.co/projects/github-com-bytemare-crawl-master) [![GolangCI](https://golangci.com/badges/github.com/bytemare/crawl.svg)](https://golangci.com/r/github.com/bytemare/crawl) [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/3285/badge)](https://bestpractices.coreinfrastructure.org/projects/3285) [![GoDoc](https://godoc.org/github.com/bytemare/crawl?status.svg)](https://godoc.org/github.com/bytemare/crawl)
+[![Build Status](https://travis-ci.com/bytemare/crawl.svg?branch=master)](https://travis-ci.com/bytemare/crawl)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=bytemare_crawl&metric=coverage)](https://sonarcloud.io/dashboard?id=bytemare_crawl)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bytemare/crawl)](https://goreportcard.com/report/github.com/bytemare/crawl)
+[![codebeat badge](https://codebeat.co/badges/db89a587-9d35-49ef-96b1-d62b9cd1775b)](https://codebeat.co/projects/github-com-bytemare-crawl-master)
+[![GolangCI](https://golangci.com/badges/github.com/bytemare/crawl.svg)](https://golangci.com/r/github.com/bytemare/crawl)
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/3285/badge)](https://bestpractices.coreinfrastructure.org/projects/3285)
+[![GoDoc](https://godoc.org/github.com/bytemare/crawl?status.svg)](https://godoc.org/github.com/bytemare/crawl)
 
 The crawler scraps a page for links, follows them and scrapes them in the same fashion.
 
@@ -49,10 +55,10 @@ StreamLinks returns a channel you can listen on for continuous results as they a
 import "github.com/bytemare/crawl"
 
 func myCrawler() {
-	
+
 	domain := "https://bytema.re"
 	timeout := 10 * time.Second
-	
+
 	resultChan, err := crawl.StreamLinks(domain, timeout)
 	if err != nil {
 		fmt.Printf("Error : %s\n", err)
@@ -80,7 +86,7 @@ func myCrawler() {
 		fmt.Printf("Error : %s\n", err)
 		os.Exit(1)
 	}
-	
+
 	fmt.Printf("Starting from %s, encountered following links :\n%s\n", domain, links)
 }
 ```
@@ -102,7 +108,7 @@ func myScraper() {
 		fmt.Printf("Error : %s\n", err)
 		os.Exit(1)
 	}
-	
+
 	fmt.Printf("Found following links on %s :\n%s\n", domain, links)
 }
 ```

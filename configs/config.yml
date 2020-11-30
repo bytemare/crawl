@@ -5,11 +5,11 @@ requests:
   timeout : 10s #specify duration with dimension : 5s, 3m, 2h
   retries : 3
 
-# Logging configuration
-logging:
+# Log configuration
+log:
   do: false
   level: 3
   output: "file" # or "stdout"
-  file: "./log-crawler.log"
+  file: "./crawler.log"
   perms: 0600
   type: "text" # or json

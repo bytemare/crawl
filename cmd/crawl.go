@@ -22,9 +22,16 @@ func main() {
 
 	domain := flag.Args()[0]
 
+	// Make a crawler
+	crawler, err := crawl.NewCrawler()
+	if err != nil {
+		fmt.Printf("Error : %s\n", err)
+		os.Exit(1)
+	}
+
 	// Launch crawler
 	fmt.Println("Starting web crawler. You can interrupt the program any time with ctrl+c.")
-	crawlerResult, err := crawl.StreamLinks(domain, time.Duration(*timeout)*time.Second)
+	crawlerResult, err := crawler.StreamLinks(domain, time.Duration(*timeout)*time.Second)
 	if err != nil {
 		fmt.Printf("Error : %s\n", err)
 		os.Exit(1)
@@ -32,8 +39,26 @@ func main() {
 
 	fmt.Println("Mapping only shows not yet visited links.")
 	for res := range crawlerResult.Stream() {
-		fmt.Printf("%s -> %s\n", res.URL, *res.Links)
+		fmt.Printf("%s -> %s\n", res.URL, res.Links)
 	}
 
 	os.Exit(0)
+
+	/*
+		// Launch crawler
+		fmt.Println("Starting web crawler. You can interrupt the program any time with ctrl+c.")
+		crawlerResult, err := crawl.StreamLinks(domain, time.Duration(*timeout)*time.Second)
+		if err != nil {
+			fmt.Printf("Error : %s\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Mapping only shows not yet visited links.")
+		for res := range crawlerResult.Stream() {
+			fmt.Printf("%s -> %s\n", res.URL, *res.Links)
+		}
+
+		os.Exit(0)
+
+	*/
 }

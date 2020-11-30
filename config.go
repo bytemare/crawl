@@ -2,22 +2,22 @@ package crawl
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/pkg/errors"
 
 	"github.com/kelseyhightower/envconfig"
 	"gopkg.in/yaml.v2"
 )
 
-var log = logrus.New()
+const defConfigFile = "configs/config.yml"
 
 func configFile() string {
-	return "configs/config.yml"
+	return defConfigFile
 }
 
 // config holds the crawler's secondary running parameters
@@ -27,15 +27,7 @@ type config struct {
 		Timeout time.Duration `yaml:"timeout" envconfig:"CRAWLER_REQ_TIMEOUT"`
 		Retries uint          `yaml:"retries" envconfig:"CRAWLER_REQ_RETRIES"`
 	} `yaml:"requests"`
-	Logging struct {
-		Level       uint   `yaml:"level" envconfig:"CRAWLER_LOG_LEVEL"`
-		Output      string `yaml:"output" envconfig:"CRAWLER_LOG_OUTPUT"`
-		File        string `yaml:"file" envconfig:"CRAWLER_LOG_FILE"`
-		Type        string `yaml:"type" envconfig:"CRAWLER_LOG_TYPE"`
-		Permissions uint   `yaml:"perms" envconfig:"CRAWLER_LOG_FILE_PERMS"`
-		Do          bool   `yaml:"do" envconfig:"CRAWLER_LOG"`
-		fileDes     *os.File
-	} `yaml:"logging"`
+	Logger Logger `yaml:"log"`
 }
 
 // configGetEnvKeys returns the list of strings containing the environment variables' key names
@@ -62,19 +54,11 @@ func configGetEmergencyConf() *config {
 			Timeout time.Duration `yaml:"timeout" envconfig:"CRAWLER_REQ_TIMEOUT"`
 			Retries uint          `yaml:"retries" envconfig:"CRAWLER_REQ_RETRIES"`
 		}{0, 3},
-		Logging: struct {
-			Level       uint   `yaml:"level" envconfig:"CRAWLER_LOG_LEVEL"`
-			Output      string `yaml:"output" envconfig:"CRAWLER_LOG_OUTPUT"`
-			File        string `yaml:"file" envconfig:"CRAWLER_LOG_FILE"`
-			Type        string `yaml:"type" envconfig:"CRAWLER_LOG_TYPE"`
-			Permissions uint   `yaml:"perms" envconfig:"CRAWLER_LOG_FILE_PERMS"`
-			Do          bool   `yaml:"do" envconfig:"CRAWLER_LOG"`
-			fileDes     *os.File
-		}{2, "stdout", "", "text", 0, false, nil},
+		Logger: Logger{logrus.New(), 2, "stdout", "", "text", 600, false, nil},
 	}
 }
 
-// initialiseCrawlConfiguration attempts to load the configuration from environment variables and a configuration file.
+// initialiseCrawlerConfiguration attempts to load the configuration from environment variables and a configuration file
 // If all environment variables are set, returns a config containing their values.
 // If some or all environment variables are missing, attempts to load a configuration from the default config file,
 // and patches the missing environment variables.
@@ -86,8 +70,8 @@ func configGetEmergencyConf() *config {
 // 	- a config file is present but reading it failed
 //	- an emergency configuration is used
 //
-// Note : When an emergency configuration is used, the env vars are populated and this function returns a valid config
-func initialiseCrawlConfiguration() (*config, error) {
+// NB : When an emergency configuration is used, the env vars are populated and this function returns a valid config
+func initialiseCrawlerConfiguration() (*config, error) {
 	// Check if environment variables are missing. If not, return them as config
 	missing := configCheckEnv()
 	if len(missing) == 0 {
@@ -96,17 +80,18 @@ func initialiseCrawlConfiguration() (*config, error) {
 	}
 
 	// Here, env vars are not set or some are missing
-	// Check is config file is present and if we can load it
+	// Check if config file is present and if we can load it
 	var fileConf config
 	isPresent, err := configLoadFile(&fileConf, configFile())
 	if isPresent && err != nil {
 		return nil, errors.Wrap(err, exitErrorConf)
 	}
+	fileConf.Logger.log = logrus.New()
 
 	// If a configuration file is not present load the default emergency configuration (i.e. no logging, no timeout)
 	var emergency error = nil
 	if !isPresent {
-		msg := fmt.Sprintf("Warning : Environmental values are missing and config file wasn't found." +
+		msg := fmt.Sprint("Warning : Environmental values are missing and config file wasn't found." +
 			"Using emergency configuration.")
 		emergency = errors.New(msg)
 		fileConf = *configGetEmergencyConf()
@@ -125,7 +110,7 @@ func initialiseCrawlConfiguration() (*config, error) {
 	}
 
 	// Initialise logging
-	if err := configInitLogging(envConf); err != nil {
+	if err := envConf.Logger.init(); err != nil {
 		return envConf, errors.Wrapf(err, "%s", emergency)
 	}
 
@@ -142,47 +127,6 @@ func configCheckEnv() []string {
 		}
 	}
 	return missing
-}
-
-// configInitLogging sets logging behaviour
-func configInitLogging(conf *config) (err error) {
-	// Enable or disable all logging
-	if !conf.Logging.Do {
-		log.SetOutput(ioutil.Discard)
-	} else {
-		// Set logging level
-		log.SetLevel(logrus.Level(conf.Logging.Level))
-
-		// Set logging output
-		if conf.Logging.Output == "file" {
-			var file *os.File
-			file, err = log2File(conf.Logging.File, os.FileMode(conf.Logging.Permissions))
-			if file != nil {
-				conf.Logging.fileDes = file
-			}
-		}
-
-		// Set logging format
-		switch conf.Logging.Type {
-		case "json":
-			log.SetFormatter(&logrus.JSONFormatter{})
-		case "text":
-			log.SetFormatter(&logrus.TextFormatter{})
-		default:
-		}
-	}
-	return err
-}
-
-// log2File switches logging to be output to file only
-func log2File(logFile string, perms os.FileMode) (file *os.File, err error) {
-	file, err = os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, perms)
-	if err == nil {
-		log.SetOutput(file)
-	} else {
-		err = errors.Wrapf(err, "Failed to set logging to file '%s', using default stderr.", logFile)
-	}
-	return file, err
 }
 
 // configPatchEnv populates missing environment variables with values found in the configuration file
@@ -236,7 +180,7 @@ func configLoadFile(config *config, filePath string) (bool, error) {
 		return false, errors.New(msg)
 	}
 	defer func() {
-		_ = file.Close()
+		_ = file.Close() //nolint:errcheck // we don't really care about that
 	}()
 
 	decoder := yaml.NewDecoder(file)
@@ -250,12 +194,13 @@ func configLoadFile(config *config, filePath string) (bool, error) {
 
 // configLoadEnv loads the crawler's configuration from environment variables
 func configLoadEnv() (*config, error) {
-	var config config
-	err := envconfig.Process("", &config)
+	var conf config
+	err := envconfig.Process("", &conf)
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to gather Env vars for configuration")
 	}
-	return &config, nil
+	conf.Logger.log = logrus.New()
+	return &conf, nil
 }
 
 // configUpdateEnvConfig populates key:value in conf

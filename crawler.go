@@ -1,274 +1,264 @@
 package crawl
 
 import (
+	"fmt"
 	"net/url"
-	"sync"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
+
 	"github.com/sirupsen/logrus"
+
+	"github.com/pkg/errors"
 )
 
-type crawler struct {
-	task
-	workers
-	parameters
-	output chan<- *LinkMap
+type CrawlerMode uint
+
+const (
+	StreamMode CrawlerMode = 1
+	FetchMode  CrawlerMode = 2
+
+	defRequestTimeout = 20 * time.Second
+	defCrawlerTimeout = 0
+	defMaxRetries     = 5
+)
+
+// Crawler holds the crawling instance configuration
+type Crawler struct {
+	// Crawling scope
+	// Domain whitelist
+	Domains []string
+
+	// Blacklist of domains not to be visited
+	DomainBlacklist []string
+
+	// User Agent to send during requests
+	UserAgent string
+
+	// Timeout per request
+	RequestTimeout time.Duration
+
+	// Timeout for total crawling
+	CrawlerTimeout time.Duration
+
+	// Maximum retries before abandoning to pull a page
+	MaxRetries int
+
+	/*
+		Private structures for the engine
+	*/
+
+	// Crawler engine
+	engine *engine
+
+	// Synchronisation
+	syn *synchron
+
+	// Callback functions
+	requestCallback  *func(*Request)
+	responseCallback *func(*Response)
+	successCallback  *func(*Response)
+	errorCallback    *func(*Response)
+	finishCallback   *func()
+
+	// Configuration
+	config *config
 }
 
-type parameters struct {
-	domain         *url.URL
-	requestTimeout time.Duration
-	maxRetry       int
+// NewCrawler returns a default initialised Crawler, or parameterised with given options
+func NewCrawler(options ...func(*Crawler)) (*Crawler, error) {
+	// Check env and initialise logging
+	conf, err := initialiseCrawlerConfiguration()
+	if err != nil && conf == nil {
+		return nil, errors.Wrap(err, exitErrorConf)
+	}
+
+	// Set up new engine
+	c := NewDefaultCrawler()
+	for _, function := range options {
+		function(c)
+	}
+
+	c.config = conf
+	return c, nil
 }
 
-type linkStates struct {
-	pending map[string]int
-	visited map[string]bool
-	failed  map[string]bool
+// UserAgent returns pre-registered common User Agents to be send in the request headers
+func UserAgent(ua string) string {
+	userAgents := map[string]string{
+		"Crawler": "Crawler",
+		"Chrome": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)" +
+			" Chrome/78.0.3904.108 Safari/537.36",
+		"Firefox": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:70.0) Gecko/20100101 Firefox/70.0",
+	}
+
+	return userAgents[ua]
 }
 
-type task struct {
-	linkStates
-	todo    chan string
-	results chan *LinkMap
+// defaultCrawler returns a default initialised Crawler
+func NewDefaultCrawler() *Crawler {
+	c := &Crawler{
+		Domains:          nil,
+		DomainBlacklist:  nil,
+		UserAgent:        UserAgent("Crawler"),
+		RequestTimeout:   defRequestTimeout,
+		CrawlerTimeout:   defCrawlerTimeout,
+		MaxRetries:       defMaxRetries,
+		engine:           nil,
+		syn:              nil,
+		requestCallback:  nil,
+		responseCallback: nil,
+		successCallback:  nil,
+		errorCallback:    nil,
+		finishCallback:   nil,
+		config:           nil,
+	}
+	c.config = configGetEmergencyConf()
+	return c
 }
 
-type workers struct {
-	workerSync sync.WaitGroup
-	workerStop chan struct{}
+// Scope sets the scope - authorised domains - for the crawler
+func Scope(domains ...string) func(*Crawler) {
+	return func(crawler *Crawler) {
+		crawler.Domains = append(crawler.Domains, domains...)
+	}
 }
 
-// LinkMap holds the links of the web page pointed to by url, of the same host as the url
-type LinkMap struct {
-	URL   string
-	Links *[]string
-	Error error
+// SetTimeout sets the timeout for the associated engine
+func Timeout(t time.Duration) func(*Crawler) {
+	return func(crawler *Crawler) {
+		crawler.CrawlerTimeout = t
+	}
 }
 
-// newCrawler returns an initialised crawler struct
-func newCrawler(domain string, output chan<- *LinkMap, timeout time.Duration, maxRetry int) (*crawler, error) {
-	dURL, err := url.Parse(domain)
+// StopOnSigInt will set SIGINT interception when possible, and halts when signal is intercepted
+func (c *Crawler) StopOnSigInt() error {
+	// todo
+	return nil
+}
+
+//
+func (c *Crawler) OnRequest() {
+	// todo
+}
+
+//
+func (c *Crawler) OnResponse() {
+	// todo
+}
+
+//
+func (c *Crawler) OnSuccess() {
+	// todo
+}
+
+//
+func (c *Crawler) OnError() {
+
+}
+
+//
+func (c *Crawler) OnFinish() {
+	// todo
+}
+
+//
+func (c *Crawler) SetUserAgent(ua string) {
+	// todo
+}
+
+//
+func (c *Crawler) Log(ua string) {
+	// todo
+}
+
+// Run starts the engine, starting with the given address
+func (c *Crawler) Run(mode CrawlerMode, start string) (*CrawlerResults, error) {
+	switch mode {
+	case StreamMode:
+		return c.StreamLinks(start, c.RequestTimeout)
+	case FetchMode:
+		return c.FetchLinks(start, c.RequestTimeout)
+	default:
+		return nil, errors.New("unknown crawler mode")
+	}
+}
+
+// validateInput returns whether input is valid and can be worked with
+func validateInput(domain string, timeout time.Duration) error {
+	// We can't crawl without a target domain
+	if domain == "" {
+		return errors.New("if you want to crawl something, please specify the target domain as argument")
+	}
+
+	// Check whether domain is of valid form
+	if _, err := url.ParseRequestURI(domain); err != nil {
+		return errors.Wrap(err, "Invalid url : you must specify a valid target domain/url to crawl")
+	}
+
+	// Invalid timeout values are handled later, but let's not the user mess with us
+	if timeout < 0 {
+		msg := fmt.Sprintf("Invalid timeout value '%d' (accepted values [0 ; +yourpatience [, in seconds)", timeout)
+		return errors.New(msg)
+	}
+
+	return nil
+}
+
+// StreamLinks returns a channel on which it will report links as they come during the crawling.
+// The caller should range over that channel to continuously retrieve messages. StreamLinks will close that channel
+// when all encountered links have been visited and none is left, when the deadline on the timeout parameter is reached,
+// or if a SIGINT or SIGTERM signals is received.
+func (c *Crawler) StreamLinks(domain string, timeout time.Duration) (*CrawlerResults, error) {
+	// check input
+	if err := validateInput(domain, timeout); err != nil {
+		return nil, errors.Wrap(err, exitErrorInput)
+	}
+
+	c.config.Logger.log.WithField("url", domain).Info("Starting web crawler.")
+	c.syn = newSynchron(timeout, 3)
+	res := newCrawlerResults(c.syn)
+
+	go c.startCrawling(domain)
+
+	return res, nil
+}
+
+// FetchLinks is a wrapper around StreamLinks and does the same, except it blocks and accumulates all links before
+// returning them to the caller.
+func (c *Crawler) FetchLinks(domain string, timeout time.Duration) (*CrawlerResults, error) {
+	res, err := c.StreamLinks(domain, timeout)
 	if err != nil {
 		return nil, err
 	}
 
-	return &crawler{
-		task: task{
-			linkStates: linkStates{
-				visited: make(map[string]bool),
-				pending: make(map[string]int),
-				failed:  make(map[string]bool),
-			},
-			todo:    make(chan string, 100),
-			results: make(chan *LinkMap, 100),
-		},
-		workers: workers{
-			workerSync: sync.WaitGroup{},
-			workerStop: make(chan struct{}),
-		},
-		parameters: parameters{
-			domain:         dURL,
-			requestTimeout: timeout,
-			maxRetry:       maxRetry,
-		},
-		output: output,
-	}, nil
-}
-
-//  newLinkMap returns an initialised LinkMap struct
-func newLinkMap(url string, links *[]string) *LinkMap {
-	return &LinkMap{
-		URL:   url,
-		Links: links,
-		Error: nil,
+	res.links = make([]string, 0, 100) // todo : trade-off here, look if we really need that
+	for linkMap := range res.Stream() {
+		res.links = append(res.links, linkMap.Links...)
 	}
+
+	return res, nil
 }
 
-// scraper serves a worker goroutine.
-// It retrieves a web page, parses it for links,
-// keeps only domain or relative links, sanitises them, an returns the LinkMap
-func (c *crawler) scraper(url string) {
-	defer c.workerSync.Done()
-
-	// LinkMap will hold the links on success, or send as is on error
-	res := newLinkMap(url, nil)
-
-	// Scrap and retrieve links
-	log.WithField("url", url).Tracef("Attempting download.")
-	links, err := cancellableScrapLinks(url, c.requestTimeout, c.workerStop)
+// ScrapLinks returns the links found in the web page pointed to by url
+func ScrapLinks(URL string, timeout time.Duration) ([]string, error) {
+	// Check env and initialise logging
+	conf, err := initialiseCrawlerConfiguration()
+	if err != nil && conf == nil {
+		return nil, errors.Wrap(err, exitErrorConf)
+	}
+	resp, err := scrapLinks(URL, timeout, nil)
 	if err != nil {
-		log.WithField("url", url).Tracef("Download failed : %s", err)
-		res.Error = err
-	} else if links != nil {
-		// Filter links by current domain
-		links = c.filterHost(links)
-		res.Links = &links
-	}
-
-	// Don't send results if we're being asked to stop
-	select {
-	case <-c.workerStop:
-		return
-
-	// Enqueue results
-	case c.results <- res:
-	}
-}
-
-// filterHost filters out links that are different from the crawler's scope
-func (c *crawler) filterHost(links []string) []string {
-	n := 0
-	for _, link := range links {
-		linkURL, _ := url.Parse(link)
-		if linkURL.Host == c.domain.Host {
-			links[n] = link
-			n++
-		} else {
-			log.WithField("host", c.domain.Host).Tracef("Filtering out link to %s.", link)
+		if merr, ok := err.(*multierror.Error); ok {
+			conf.Logger.log.WithFields(logrus.Fields{
+				"url": URL,
+			}).Errorf("Encountered errors in scraping page : %s", merr.Errors)
 		}
 	}
-	return links[:n]
-}
 
-// filterLinks filters out links that have already been visited or are in pending treatment
-func (c *crawler) filterLinks(links []string) []string {
-	n := 0
-	// Only keep links that are neither pending or visited
-	for _, link := range links {
-		// If pending, skip
-		if _, ok := c.pending[link]; ok {
-			log.WithField("status", "pending").Tracef("Discarding %s.", link)
-			continue
-		}
-
-		// If visited, skip
-		if _, ok := c.visited[link]; ok {
-			log.WithField("status", "pending").Tracef("Discarding %s.", link)
-			continue
-		}
-
-		// Keep the link
-		links[n] = link
-		n++
-	}
-	return links[:n]
-}
-
-// handleResultError handles the error a LinkMap has upon return of a link scraping attempt
-func (c *crawler) handleResultError(res *LinkMap) {
-	log.WithField("url", res.URL).Tracef("LinkMap returned with error : %s", res.Error)
-
-	// If we tried to much, mark it as failed
-	if c.pending[res.URL] >= c.maxRetry {
-		c.failed[res.URL] = true
-		delete(c.pending, res.URL)
-		log.WithField("url", res.URL).Errorf("Discarding. Page unreachable after %d attempts.\n", c.maxRetry)
-		return
+	if resp == nil {
+		return nil, err
 	}
 
-	// If we have not reached maximum retries, re-enqueue
-	c.todo <- res.URL
-}
-
-// handleResult treats the LinkMap of scraping a page for links
-func (c *crawler) handleResult(result *LinkMap) {
-	if result.Error != nil {
-		c.handleResultError(result)
-		return
-	}
-
-	// Change state from pending to visited
-	c.visited[result.URL] = true
-	delete(c.pending, result.URL)
-
-	// Filter out already visited links
-	log.WithField("url", result.URL).Tracef("Filtering links.")
-	filtered := c.filterLinks(*result.Links)
-	result.Links = &filtered
-
-	// Add filtered list in queue of links to visit
-	for _, link := range filtered {
-		c.todo <- link
-	}
-
-	// Log LinkMap and send them to caller
-	log.WithFields(logrus.Fields{
-		"url":   result.URL,
-		"links": filtered,
-	}).Infof("Found %d unvisited links.", len(filtered))
-	c.output <- result
-}
-
-// newTask triggers a new visit on a link
-func (c *crawler) newTask(url string) {
-	// Add to pending tasks
-	c.pending[url]++
-
-	// Launch a worker goroutine on that link
-	c.workerSync.Add(1)
-	go c.scraper(url)
-}
-
-// checkProgress verifies if there are pages left to scrap or being scraped. Returns false if not.
-func (c *crawler) checkProgress() bool {
-	return len(c.todo) != 0 || len(c.pending) != 0
-}
-
-// initialiseCrawler initialises and returns a new crawler struct
-func initialiseCrawler(domain string, syn *synchron, conf *config) *crawler {
-	c, err := newCrawler(domain, syn.results, conf.Requests.Timeout, int(conf.Requests.Retries))
-	if err != nil {
-		log.WithField("url", domain).Error(err)
-		syn.notifyStop(exitErrorInit)
-		return nil
-	}
-	c.todo <- c.domain.String()
-	return c
-}
-
-// quitCrawler initiates the shutdown process of the crawler
-func (c *crawler) quitCrawler(syn *synchron) {
-	// Declare intend to stop
-	syn.notifyStop(exitLinks)
-
-	// Inform launched workers to stop, and wait for them
-	close(c.workerStop)
-	c.workerSync.Wait()
-
-	log.WithField("url", c.domain.String()).Infof("Visited %d links. %d failed.", len(c.visited), len(c.failed))
-}
-
-// crawl manages worker goroutines scraping pages and prints results
-func crawl(domain string, syn *synchron, conf *config) {
-	defer syn.group.Done()
-
-	c := initialiseCrawler(domain, syn, conf)
-	if c == nil {
-		return
-	}
-	ticker := time.NewTicker(time.Second)
-loop:
-	for {
-		select {
-		// Upon receiving a stop signal
-		case <-syn.stopChan:
-			break loop
-
-		// Upon receiving a resulting from a worker scraping a page
-		case result := <-c.results:
-			c.handleResult(result)
-
-		// For every link that is left to visit in the queue
-		case link := <-c.todo:
-			c.newTask(link)
-
-		// Every tick, verify if there are jobs or pending tasks left
-		case <-ticker.C:
-			if !c.checkProgress() {
-				break loop
-			}
-		}
-	}
-	ticker.Stop()
-	c.quitCrawler(syn)
+	return resp.Links, err
 }

@@ -5,10 +5,14 @@ import (
 	"time"
 )
 
+const (
+	stopChanParties = 2
+)
+
 // synchron holds the synchronisation tools and parameters
 type synchron struct {
 	timeout     time.Duration
-	results     chan *LinkMap
+	results     chan *Response
 	stopChan    chan struct{}
 	mutex       *sync.Mutex
 	group       sync.WaitGroup
@@ -20,9 +24,9 @@ type synchron struct {
 func newSynchron(timeout time.Duration, nbParties int) *synchron {
 	s := &synchron{
 		timeout:  timeout,
-		results:  make(chan *LinkMap),
+		results:  make(chan *Response),
 		group:    sync.WaitGroup{},
-		stopChan: make(chan struct{}, 2),
+		stopChan: make(chan struct{}, stopChanParties),
 		stopFlag: false,
 		mutex:    &sync.Mutex{},
 	}
@@ -44,9 +48,9 @@ func (syn *synchron) checkout() bool {
 
 // notifyStop notifies only once, on first call, to shutdown
 func (syn *synchron) notifyStop(exitContext string) {
-	// Only the first caller of checkout will have true returned
+	// Only the first caller of checkout will have true returned, thus entering here
 	if syn.checkout() {
-		log.Infof("Initiating shutdown : %s", exitContext)
+		// todo log.Infof("Initiating shutdown : %s", exitContext)
 
 		// Register the reason/context for the shutdown
 		syn.exitContext = exitContext

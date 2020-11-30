@@ -56,14 +56,14 @@ func TestExtractLink(t *testing.T) {
 
 	// Should return ""
 	// nil slice on token.Attr
-	if extractLink("", testToken) != "" {
+	if link, _ := extractLink("", testToken); link != "" {
 		t.Errorf(errMsgF, "token.Attr is nil")
 	}
 
 	// Should return ""
 	// valid token.Attr but no href
 	testToken.Attr = []html.Attribute{testAttribute}
-	if extractLink("", testToken) != "" {
+	if link, _ := extractLink("", testToken); link != "" {
 		t.Errorf(errMsgF, "no href was found")
 	}
 
@@ -73,7 +73,7 @@ func TestExtractLink(t *testing.T) {
 	testAttribute.Val = "%"
 	testToken.Attr = []html.Attribute{testAttribute}
 
-	if extractLink("", testToken) != "" {
+	if link, _ := extractLink("", testToken); link != "" {
 		t.Errorf(errMsgF, "token.Attr.Val is not valid for sanitise()")
 	}
 }

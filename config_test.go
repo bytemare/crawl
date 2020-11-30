@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -118,33 +120,37 @@ func TestConfigLoadFileFail(t *testing.T) {
 
 func TestConfigInitLoggingSuccess(t *testing.T) {
 	conf := getTestConfig()
-	conf.Logging.Do = true
-	conf.Logging.Level = 1
-	conf.Logging.Output = "file"
-	conf.Logging.Permissions = 0666
+	conf.Logger.Do = true
+	conf.Logger.Level = 1
+	conf.Logger.Output = "file"
+	conf.Logger.Permissions = 0666
 
-	file, err := ioutil.TempFile("", "*.log-crawler.log")
+	file, err := ioutil.TempFile("", "crawler-*.log")
 	if err != nil {
-		log.Fatal(err)
+		t.Errorf("Could not create temporary logging file : %s", err)
+		return
 	}
-	conf.Logging.File = file.Name()
+	conf.Logger.File = file.Name()
 
 	// Tests on
-	conf.Logging.Type = "json"
-	if err := configInitLogging(conf); err != nil {
+	conf.Logger.Type = "json"
+	if err := conf.Logger.init(); err != nil {
 		t.Errorf("init logging failed : '%s'.\n", err)
 	}
-	conf.Logging.Type = "text"
-	if err := configInitLogging(conf); err != nil {
+	conf.Logger.Type = "text"
+	if err := conf.Logger.init(); err != nil {
 		t.Errorf("init logging failed : '%s'.\n", err)
 	}
 
-	if err := os.Remove(conf.Logging.File); err != nil {
-		fmt.Printf("could not remove test log file '%s' : %s\n", conf.Logging.File, err)
+	// Close logging file
+	_ = conf.Logger.fileDes.Close()
+
+	if err := os.Remove(conf.Logger.File); err != nil {
+		fmt.Printf("could not remove test log file '%s' : %s\n", conf.Logger.File, err)
 	}
 }
 
-// Test case when hardcoded config file is not there, and env vars not set
+// Test case when hardcoded config file is not there, and env vars not set, and default/emergency config is used
 func TestInitialiseCrawlConfigurationNoFileNoEnv(t *testing.T) {
 	test := getConfigTest()
 	defConf := getTestConfig()
@@ -156,8 +162,10 @@ func TestInitialiseCrawlConfigurationNoFileNoEnv(t *testing.T) {
 	}
 	os.Clearenv()
 
-	conf, _ := initialiseCrawlConfiguration()
+	conf, _ := initialiseCrawlerConfiguration()
 
+	defConf.Logger.log = nil
+	conf.Logger.log = nil
 	assert.Equal(t, *defConf, *conf)
 	/*
 		if *conf != *defConf {
@@ -182,9 +190,9 @@ func TestInitialiseCrawlConfigurationInvalidConfigFile(t *testing.T) {
 	}
 
 	// Test case where there are missing environment vars, config file is present but could not be parsed
-	_, err = initialiseCrawlConfiguration()
+	_, err = initialiseCrawlerConfiguration()
 	if err == nil {
-		t.Error("initialiseCrawlConfiguration() should fail if config file is not a valid yaml file.")
+		t.Error("initialiseCrawlerConfiguration() should fail if config file is not a valid yaml file.")
 	}
 
 	// Restore config file and env vars
@@ -199,19 +207,22 @@ func TestInitialiseCrawlConfigurationSuccess(t *testing.T) {
 		t.Errorf("This test demands a valid configuration file is present and used : %s", err)
 		return
 	}
+	fileConf.Logger.log = logrus.New()
 
 	// Backup and clear env vars
 	env := getEnv()
 	os.Clearenv()
 
 	// Initialise configuration
-	initConf, err := initialiseCrawlConfiguration()
+	initConf, err := initialiseCrawlerConfiguration()
 	if err != nil {
-		t.Errorf("initialiseCrawlConfiguration() failed : %s\n", err)
+		t.Errorf("initialiseCrawlerConfiguration() failed : %s\n", err)
 		goto restore
 	}
 
 	// Check if configuration and environment were set up properly
+	initConf.Logger.log = nil
+	fileConf.Logger.log = nil
 	if *initConf != fileConf {
 		t.Errorf("The initialised configuration is different from the one loaded from file."+
 			"\n\t\tfile : %v\n\t\tinit : %v\n", fileConf, initConf)
